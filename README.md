@@ -1,5 +1,7 @@
 # The Ploopy Headphones
 
+![The Ploopy Headphones](headphones.jpg)
+
 By some stroke of luck, you've made your way here. The Ploopy Headphones. Your life will never be the same.
 
 This repository contains all of the design and production files necessary to make a set of Ploopy Headphones. We've also included some kick-ass documentation in the Wiki on how to get it made, assemble it, and program it.
