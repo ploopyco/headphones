@@ -1,0 +1,50 @@
+; Copyright 2022 Colin Lam, Ploopy Corporation
+;
+; This program is free software: you can redistribute it and/or modify
+; it under the terms of the GNU General Public License as published by
+; the Free Software Foundation, either version 3 of the License, or
+; (at your option) any later version.
+;
+; This program is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+.program i2s_read
+.side_set 2
+
+set x, 30                   side 0b00
+
+left_channel:
+    in pins, 1              side 0b01
+    jmp x-- left_channel    side 0b00
+    in pins, 1              side 0b11
+
+set x, 30                   side 0b10
+
+right_channel:
+    in pins, 1              side 0b11
+    jmp x--, right_channel  side 0b10
+    in pins, 1              side 0b01
+
+
+.program i2s_write
+.side_set 2
+
+set x, 30                   side 0b01
+
+left_channel:
+    out pins, 1             side 0b00
+    jmp x-- left_channel    side 0b01
+    out pins, 1             side 0b10
+
+set x, 30                   side 0b11
+
+right_channel:
+    out pins, 1             side 0b10
+    jmp x--, right_channel  side 0b11
+    out pins, 1             side 0b00
