@@ -32,39 +32,34 @@
  ****************************************************************************/
 
 void define_filters() {
+
     // First filter.
     bqf_memreset(&bqf_filters_mem_left[0]);
     bqf_memreset(&bqf_filters_mem_right[0]);
-    bqf_peaking_config(SAMPLING_FREQ, 38.0, -22.0, 0.9, &bqf_filters_left[0]);
-    bqf_peaking_config(SAMPLING_FREQ, 38.0, -22.0, 0.9, &bqf_filters_right[0]);
-
+    bqf_peaking_config(SAMPLING_FREQ, 38.0, -19.0, 0.9, &bqf_filters_left[0]);
+    bqf_peaking_config(SAMPLING_FREQ, 38.0, -19.0, 0.9, &bqf_filters_right[0]);
+    
     // Second filter.
     bqf_memreset(&bqf_filters_mem_left[1]);
     bqf_memreset(&bqf_filters_mem_right[1]);
-    bqf_peaking_config(SAMPLING_FREQ, 430.0, 6.0, 3.5, &bqf_filters_left[1]);
-    bqf_peaking_config(SAMPLING_FREQ, 430.0, 6.0, 3.5, &bqf_filters_right[1]);
+    bqf_lowshelf_config(SAMPLING_FREQ, 2900.0, 3.0, 4.0, &bqf_filters_left[1]);
+    bqf_lowshelf_config(SAMPLING_FREQ, 2900.0, 3.0, 4.0, &bqf_filters_right[1]);
 
     // Third filter.
     bqf_memreset(&bqf_filters_mem_left[2]);
     bqf_memreset(&bqf_filters_mem_right[2]);
-    bqf_peaking_config(SAMPLING_FREQ, 2200.0, 7.0, 4.0, &bqf_filters_left[2]);
-    bqf_peaking_config(SAMPLING_FREQ, 2200.0, 7.0, 4.0, &bqf_filters_right[2]);
-
+    bqf_peaking_config(SAMPLING_FREQ, 430.0, 6.0, 3.5, &bqf_filters_left[2]);
+    bqf_peaking_config(SAMPLING_FREQ, 430.0, 6.0, 3.5, &bqf_filters_right[2]);
+    
     // Fourth filter.
     bqf_memreset(&bqf_filters_mem_left[3]);
     bqf_memreset(&bqf_filters_mem_right[3]);
-    bqf_peaking_config(SAMPLING_FREQ, 3500.0, -5.0, 2.0, &bqf_filters_left[3]);
-    bqf_peaking_config(SAMPLING_FREQ, 3500.0, -5.0, 2.0, &bqf_filters_right[3]);
+    bqf_highshelf_config(SAMPLING_FREQ, 8400.0, 3.0, 4.0, &bqf_filters_left[3]);
+    bqf_highshelf_config(SAMPLING_FREQ, 8400.0, 3.0, 4.0, &bqf_filters_right[3]);
 
     // Fifth filter.
     bqf_memreset(&bqf_filters_mem_left[4]);
     bqf_memreset(&bqf_filters_mem_right[4]);
-    bqf_peaking_config(SAMPLING_FREQ, 6800.0, -6.0, 3.0, &bqf_filters_left[4]);
-    bqf_peaking_config(SAMPLING_FREQ, 6800.0, -6.0, 3.0, &bqf_filters_right[4]);
-
-    // Sixth filter.
-    bqf_memreset(&bqf_filters_mem_left[5]);
-    bqf_memreset(&bqf_filters_mem_right[5]);
-    bqf_peaking_config(SAMPLING_FREQ, 9200.0, 3.0, 4.0, &bqf_filters_left[5]);
-    bqf_peaking_config(SAMPLING_FREQ, 9200.0, 3.0, 4.0, &bqf_filters_right[5]);
+    bqf_peaking_config(SAMPLING_FREQ, 4800.0, 6.0, 5.0, &bqf_filters_left[4]);
+    bqf_peaking_config(SAMPLING_FREQ, 4800.0, 6.0, 5.0, &bqf_filters_right[4]);
 }
