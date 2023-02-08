@@ -21,7 +21,7 @@
 #include "bqf.h"
 
 // todo fix this. people will forget this.
-#define FILTER_STAGES 6  // Don't forget to set this to the right size!
+#define FILTER_STAGES 5  // Don't forget to set this to the right size!
 
 extern bqf_coeff_t bqf_filters_left[FILTER_STAGES];
 extern bqf_coeff_t bqf_filters_right[FILTER_STAGES];
