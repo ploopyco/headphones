@@ -91,7 +91,7 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     int samples = usb_buffer->data_len / 2;
 
     for (int i = 0; i < samples; i++)
-        out[i] = in[i] / 4; // fixes digital distortion bug
+        out[i] = in[i];
 
     multicore_fifo_push_blocking(CORE0_READY);
     multicore_fifo_push_blocking(samples);
