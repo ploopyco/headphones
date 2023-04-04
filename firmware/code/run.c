@@ -113,7 +113,7 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
 
     // Multiply the outgoing signal with the volume multiple
     for (int i = 0; i < samples; i++)
-        out[i] = out[i] * (int32_t) vol_mul * 4;
+        out[i] = out[i] * (int32_t) vol_mul;
 
     i2s_stream_write(&i2s_write_obj, userbuf, samples * 4);
 
