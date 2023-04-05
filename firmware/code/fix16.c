@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <math.h>
-
+#include <limits.h>
 #include "fix16.h"
 
 fix16_t fix16_from_int(int16_t a) {
@@ -30,9 +30,23 @@ fix16_t fix16_from_int(int16_t a) {
 }
 
 int16_t fix16_to_int(fix16_t a) {
-    if (a >= 0)
-        return (a + (fix16_one >> 1)) / fix16_one;
-    return (a - (fix16_one >> 1)) / fix16_one;
+    // Handle rounding up front, adding one can cause an overflow/underflow
+    a+=(fix16_one >> 1);
+
+    // Saturate the value if an overflow has occurred
+    uint32_t upper = (a >> 30);
+    if (a < 0) {
+        if (~upper)
+        {
+            return SHRT_MIN;
+        }
+    } else {
+        if (upper)
+        {
+            return SHRT_MAX;
+        }
+    }
+    return (a >> 15);
 }
 
 fix16_t fix16_from_dbl(double a) {
@@ -48,16 +62,6 @@ double fix16_to_dbl(fix16_t a) {
 // hic sunt dracones
 fix16_t fix16_mul(fix16_t inArg0, fix16_t inArg1) {
     int64_t product = (int64_t)inArg0 * inArg1;
-
-    uint32_t upper = (product >> 47);
-    if (product < 0) {
-        if (~upper)
-            return fix16_overflow;
-        product--;
-    } else {
-        if (upper)
-            return fix16_overflow;
-    }
 
     fix16_t result = product >> 15;
     result += (product & 0x4000) >> 14;
