@@ -17,7 +17,21 @@ Run `filter_test` to process the PCM samples. The `filter_test` program takes tw
 You can listen to the PCM files using ffplay (which is usually included with ffmpeg):
 
 ```
-./ffplay -f s16le -ar 48000 -ac 2 output.pcm
+ffplay -f s16le -ar 48000 -ac 2 output.pcm
 ```
 
 If there are no obvious problems, go ahead and flash your firmware.
+
+## reboot_bootloader.py
+If your Ploopy Headphones firmware is new enough, it has support for a USB vendor command that will cause the RP2040 to reboot into the
+bootloader. This will enable you to update the firmware without having to remove the case and short the pins on the board.
+
+### Usage
+Connect the Ploopy headphones DAC and run:
+
+```
+./reboot_bootloader.py
+```
+
+You will need python3 and the pyusb module. If you get a permission denied error you may need to configure your udev rules, or run the
+script with administrator privileges.

@@ -34,6 +34,7 @@
 #include "pico/stdlib.h"
 #include "pico/usb_device.h"
 #include "pico/multicore.h"
+#include "pico/bootrom.h"
 #include "AudioClassCommon.h"
 
 #include "run.h"
@@ -57,6 +58,10 @@ static struct {
     bool mute;
 } audio_state = {
     .freq = 48000,
+};
+
+enum vendor_cmds {
+    REBOOT_BOOTLOADER = 0
 };
 
 int main(void) {
@@ -646,6 +651,20 @@ static bool do_set_current(struct usb_setup_packet *setup) {
     return false;
 }
 
+static bool ad_setup_request_handler(__unused struct usb_device *device, struct usb_setup_packet *setup) {
+    setup = __builtin_assume_aligned(setup, 4);
+    if (USB_REQ_TYPE_TYPE_VENDOR == (setup->bmRequestType & USB_REQ_TYPE_TYPE_MASK)) {
+        // To prevent badly behaving software from accidentally triggering a reboot, e expect
+        // the wValue to be equal to the Ploopy vendor id.
+        if (setup->bRequest == REBOOT_BOOTLOADER && setup->wValue == 0x2E8A) {
+            reset_usb_boot(0, 0);
+            // reset_usb_boot does not return, so we will not respond to this command.
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool ac_setup_request_handler(__unused struct usb_interface *interface, struct usb_setup_packet *setup) {
     setup = __builtin_assume_aligned(setup, 4);
     if (USB_REQ_TYPE_TYPE_CLASS == (setup->bmRequestType & USB_REQ_TYPE_TYPE_MASK)) {
@@ -726,6 +745,8 @@ void usb_sound_card_init() {
         count_of(boot_device_interfaces), _get_descriptor_string);
 
     assert(device);
+
+    device->setup_request_handler = ad_setup_request_handler;
     audio_set_volume(DEFAULT_VOLUME);
     _audio_reconfigure();
 
