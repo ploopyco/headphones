@@ -40,10 +40,10 @@
 
 #define ENCODE_DB(x) ((uint16_t)(int16_t)((x)*256))
 
-#define MIN_VOLUME ENCODE_DB(-CENTER_VOLUME_INDEX)
+#define MIN_VOLUME ENCODE_DB(-100)
 #define DEFAULT_VOLUME ENCODE_DB(0)
-#define MAX_VOLUME ENCODE_DB(count_of(db_to_vol)-CENTER_VOLUME_INDEX)
-#define VOLUME_RESOLUTION ENCODE_DB(1)
+#define MAX_VOLUME ENCODE_DB(0)
+#define VOLUME_RESOLUTION ENCODE_DB(0.5f)
 
 typedef struct _audio_device_config {
     struct usb_configuration_descriptor descriptor;

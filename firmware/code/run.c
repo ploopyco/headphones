@@ -54,7 +54,7 @@ bqf_mem_t bqf_filters_mem_right[FILTER_STAGES];
 static struct {
     uint32_t freq;
     int16_t volume;
-    int16_t vol_mul;
+    int16_t target_volume;
     bool mute;
 } audio_state = {
     .freq = 48000,
@@ -92,7 +92,6 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     struct usb_buffer *usb_buffer = usb_current_out_packet_buffer(ep);
     int16_t *in = (int16_t *) usb_buffer->data;
     int32_t *out = (int32_t *) userbuf;
-    uint16_t vol_mul = audio_state.vol_mul;
     int samples = usb_buffer->data_len / 2;
 
     for (int i = 0; i < samples; i++)
@@ -115,10 +114,6 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
 
     // Block until core 1 has finished transforming the data
     uint32_t ready = multicore_fifo_pop_blocking();
-
-    // Multiply the outgoing signal with the volume multiple
-    for (int i = 0; i < samples; i++)
-        out[i] = out[i] * (int32_t) vol_mul;
 
     i2s_stream_write(&i2s_write_obj, userbuf, samples * 4);
 
@@ -154,12 +149,32 @@ void core1_entry() {
 
         // Signal to core 0 that the data has all been transformed
         multicore_fifo_push_blocking(CORE1_READY);
+
+        // Update the volume if required. We do this from core1 as
+        // core0 is more heavily loaded, doing this from core0 can
+        // lead to audio crackling.
+        if (audio_state.volume != audio_state.target_volume) {
+            // Volume attenuation:
+            //  0: 0db (default)
+            //  55: -100db
+            //  56..: Mute
+            uint8_t value = 255 + (audio_state.target_volume / 128);
+
+            uint8_t buf[3];
+            buf[0] = 65;    // register addr
+            buf[1] = value; // data left
+            buf[2] = value; // data right
+            i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 3, false);
+
+            audio_state.volume = audio_state.target_volume;
+        }
     }
 }
 
 void setup() {
     set_sys_clock_khz(SYSTEM_FREQ / 1000, true);
     sleep_ms(100);
+    // stdio_init_all();
 
     userbuf = malloc(sizeof(uint8_t) * RINGBUF_LEN_IN_BYTES);
     
@@ -185,7 +200,10 @@ void setup() {
     gpio_set_dir(PCM3060_RST_PIN, GPIO_OUT);
     gpio_put(PCM3060_RST_PIN, true);
 
-    i2c_init(i2c0, 50000);
+    // The PCM3060 supports standard mode (100kbps) or fast mode (400kbps)
+    // we run in fast mode so we dont block the core for too long while
+    // updating the volume.
+    i2c_init(i2c0, 400000);
     gpio_set_function(PCM3060_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(PCM3060_SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(PCM3060_SDA_PIN);
@@ -202,6 +220,11 @@ void setup() {
 
     // Don't remove this. Don't do it.
     sleep_ms(200);
+
+    // Set data format to 16 bit right justified, MSB first
+    buf[0] = 67;   // register addr
+    buf[1] = 0x03; // data
+    i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 2, false);
 
     // Enable DAC
     buf[0] = 64; // register addr
@@ -512,22 +535,6 @@ static bool do_get_current(struct usb_setup_packet *setup) {
     return false;
 }
 
-// todo this seemed like aood guess, but is not correct
-uint16_t db_to_vol[91] = {
-        0x0001, 0x0001, 0x0001, 0x0001, 0x0001, 0x0001, 0x0002, 0x0002,
-        0x0002, 0x0002, 0x0003, 0x0003, 0x0004, 0x0004, 0x0005, 0x0005,
-        0x0006, 0x0007, 0x0008, 0x0009, 0x000a, 0x000b, 0x000d, 0x000e,
-        0x0010, 0x0012, 0x0014, 0x0017, 0x001a, 0x001d, 0x0020, 0x0024,
-        0x0029, 0x002e, 0x0033, 0x003a, 0x0041, 0x0049, 0x0052, 0x005c,
-        0x0067, 0x0074, 0x0082, 0x0092, 0x00a4, 0x00b8, 0x00ce, 0x00e7,
-        0x0104, 0x0124, 0x0147, 0x016f, 0x019c, 0x01ce, 0x0207, 0x0246,
-        0x028d, 0x02dd, 0x0337, 0x039b, 0x040c, 0x048a, 0x0518, 0x05b7,
-        0x066a, 0x0732, 0x0813, 0x090f, 0x0a2a, 0x0b68, 0x0ccc, 0x0e5c,
-        0x101d, 0x1214, 0x1449, 0x16c3, 0x198a, 0x1ca7, 0x2026, 0x2413,
-        0x287a, 0x2d6a, 0x32f5, 0x392c, 0x4026, 0x47fa, 0x50c3, 0x5a9d,
-        0x65ac, 0x7214, 0x7fff
-};
-
 static bool do_get_minimum(struct usb_setup_packet *setup) {
     if ((setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
         switch (setup->wValue >> 8u) {
@@ -584,14 +591,19 @@ static void _audio_reconfigure() {
 }
 
 static void audio_set_volume(int16_t volume) {
-    audio_state.volume = volume;
-    // todo interpolate
-    volume += CENTER_VOLUME_INDEX * 256;
-    if (volume < 0)
-        volume = 0;
-    if (volume >= count_of(db_to_vol) * 256)
-        volume = count_of(db_to_vol) * 256 - 1;
-    audio_state.vol_mul = db_to_vol[((uint16_t)volume) >> 8u];
+    // volume is in the range 127.9961dB (0x7FFF) .. -127.9961dB (0x8001). 0x8000 = mute
+    // the old code reported a min..max volume of -90.9961dB (0xA500) .. 0dB (0x0)
+
+    if (volume == 0x8000) {
+        // Mute case
+    }
+    else if (volume > (int16_t) MAX_VOLUME) {
+        volume = MAX_VOLUME;
+    }
+    else if (volume < (int16_t) MIN_VOLUME) {
+        volume = MIN_VOLUME;
+    }
+    audio_state.target_volume = volume;
 }
 
 static void audio_cmd_packet(struct usb_endpoint *ep) {
@@ -603,6 +615,10 @@ static void audio_cmd_packet(struct usb_endpoint *ep) {
             switch (audio_control_cmd_t.cs) {
                 case 1: { // mute
                     audio_state.mute = buffer->data[0];
+                    uint8_t buf[2];
+                    buf[0] = 68;   // register addr
+                    buf[1] = buffer->data[0] ? 0x3 : 0x0; // data
+                    i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 2, false);
                     break;
                 }
                 case 2: { // volume
