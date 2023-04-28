@@ -46,15 +46,21 @@
 i2s_obj_t i2s_write_obj;
 static uint8_t *userbuf;
 
-bqf_coeff_t bqf_filters_left[FILTER_STAGES];
-bqf_coeff_t bqf_filters_right[FILTER_STAGES];
-bqf_mem_t bqf_filters_mem_left[FILTER_STAGES];
-bqf_mem_t bqf_filters_mem_right[FILTER_STAGES];
+bqf_coeff_t bqf_filters_left[MAX_FILTER_STAGES];
+bqf_coeff_t bqf_filters_right[MAX_FILTER_STAGES];
+bqf_mem_t bqf_filters_mem_left[MAX_FILTER_STAGES];
+bqf_mem_t bqf_filters_mem_right[MAX_FILTER_STAGES];
 
 static struct {
     uint32_t freq;
-    int16_t volume;
-    int16_t target_volume;
+    union {
+        int16_t volume[2];
+        int32_t _volume;
+    };
+    union {
+        int16_t target_volume[2];
+        int32_t _target_volume;
+    };
     bool mute;
 } audio_state = {
     .freq = 48000,
@@ -153,20 +159,18 @@ void core1_entry() {
         // Update the volume if required. We do this from core1 as
         // core0 is more heavily loaded, doing this from core0 can
         // lead to audio crackling.
-        if (audio_state.volume != audio_state.target_volume) {
-            // Volume attenuation:
+        if (audio_state._volume != audio_state._target_volume) {
+            // PCM3060 volume attenuation:
             //  0: 0db (default)
             //  55: -100db
             //  56..: Mute
-            uint8_t value = 255 + (audio_state.target_volume / 128);
-
             uint8_t buf[3];
             buf[0] = 65;    // register addr
-            buf[1] = value; // data left
-            buf[2] = value; // data right
+            buf[1] = 255 + (audio_state.target_volume[0] / 128); // data left
+            buf[2] = 255 + (audio_state.target_volume[1] / 128); // data right
             i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 3, false);
 
-            audio_state.volume = audio_state.target_volume;
+            audio_state._volume = audio_state._target_volume;
         }
     }
 }
@@ -335,9 +339,9 @@ static const audio_device_config ad_conf = {
             .bSourceID = 1,
             .bControlSize = 1,
             .bmaControls = {
-                AUDIO_FEATURE_MUTE | AUDIO_FEATURE_VOLUME,
-                0,
-                0
+                AUDIO_FEATURE_MUTE, // Master channel
+                AUDIO_FEATURE_VOLUME, // Left channel
+                AUDIO_FEATURE_VOLUME, // Right channel
             },
             .iFeature = 0,
         },
@@ -521,7 +525,17 @@ static bool do_get_current(struct usb_setup_packet *setup) {
             }
             case 2: { // volume
                 /* Current volume. See UAC Spec 1.0 p.77 */
-                usb_start_tiny_control_in_transfer(audio_state.volume, 2);
+                const uint8_t cn = (uint8_t) setup->wValue;
+                if (cn == AUDIO_CHANNEL_LEFT_FRONT) {
+                    usb_start_tiny_control_in_transfer(audio_state.target_volume[0], 2);
+                }
+                else if (cn == AUDIO_CHANNEL_RIGHT_FRONT) {
+                    usb_start_tiny_control_in_transfer(audio_state.target_volume[1], 2);
+                }
+                else
+                {
+                    return false;
+                }
                 return true;
             }
         }
@@ -590,7 +604,7 @@ static void _audio_reconfigure() {
     }
 }
 
-static void audio_set_volume(int16_t volume) {
+static void audio_set_volume(int8_t channel, int16_t volume) {
     // volume is in the range 127.9961dB (0x7FFF) .. -127.9961dB (0x8001). 0x8000 = mute
     // the old code reported a min..max volume of -90.9961dB (0xA500) .. 0dB (0x0)
 
@@ -603,12 +617,21 @@ static void audio_set_volume(int16_t volume) {
     else if (volume < (int16_t) MIN_VOLUME) {
         volume = MIN_VOLUME;
     }
-    audio_state.target_volume = volume;
+    if (channel == AUDIO_CHANNEL_LEFT_FRONT || channel == 0) {
+        audio_state.target_volume[0] = volume;
+    }
+    if (channel == AUDIO_CHANNEL_RIGHT_FRONT || channel == 0) {
+        audio_state.target_volume[1] = volume;
+    }
 }
 
 static void audio_cmd_packet(struct usb_endpoint *ep) {
     assert(audio_control_cmd_t.cmd == AUDIO_REQ_SetCurrent);
     struct usb_buffer *buffer = usb_current_out_packet_buffer(ep);
+
+    // printf("%s: CMD: %u, Type: %u, CS: %u, CN: %u, Unit: %u, Len: %u\n", __PRETTY_FUNCTION__, audio_control_cmd_t.cmd, audio_control_cmd_t.type,
+    //    audio_control_cmd_t.cs, audio_control_cmd_t.cn, audio_control_cmd_t.unit, audio_control_cmd_t.len);
+
     audio_control_cmd_t.cmd = 0;
     if (buffer->data_len >= audio_control_cmd_t.len) {
         if (audio_control_cmd_t.type == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
@@ -622,7 +645,7 @@ static void audio_cmd_packet(struct usb_endpoint *ep) {
                     break;
                 }
                 case 2: { // volume
-                    audio_set_volume(*(int16_t *) buffer->data);
+                    audio_set_volume(audio_control_cmd_t.cn, *(int16_t *) buffer->data);
                     break;
                 }
             }
@@ -763,7 +786,7 @@ void usb_sound_card_init() {
     assert(device);
 
     device->setup_request_handler = ad_setup_request_handler;
-    audio_set_volume(DEFAULT_VOLUME);
+    audio_set_volume(0, DEFAULT_VOLUME);
     _audio_reconfigure();
 
     usb_device_start();

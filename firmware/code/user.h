@@ -20,13 +20,13 @@
 
 #include "bqf.h"
 
-// todo fix this. people will forget this.
-#define FILTER_STAGES 5  // Don't forget to set this to the right size!
+#define MAX_FILTER_STAGES 8
+extern int FILTER_STAGES;
 
-extern bqf_coeff_t bqf_filters_left[FILTER_STAGES];
-extern bqf_coeff_t bqf_filters_right[FILTER_STAGES];
-extern bqf_mem_t bqf_filters_mem_left[FILTER_STAGES];
-extern bqf_mem_t bqf_filters_mem_right[FILTER_STAGES];
+extern bqf_coeff_t bqf_filters_left[MAX_FILTER_STAGES];
+extern bqf_coeff_t bqf_filters_right[MAX_FILTER_STAGES];
+extern bqf_mem_t bqf_filters_mem_left[MAX_FILTER_STAGES];
+extern bqf_mem_t bqf_filters_mem_right[MAX_FILTER_STAGES];
 
 void define_filters(void);
 

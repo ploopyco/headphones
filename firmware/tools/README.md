@@ -5,7 +5,7 @@ This is a basic utility for testing the Ploopy headphones filtering routines on 
 Find a source file and use ffmpeg to convert it to 16bit stereo PCM samples:
 
 ```
-ffmpeg -i <input file> -map 0:6 -vn -f s16le -acodec pcm_s16le input.pcm
+ffmpeg -i <input file> -vn -f s16le -acodec pcm_s16le input.pcm
 ```
 
 Run `filter_test` to process the PCM samples. The `filter_test` program takes two arguments an input file and an output file:

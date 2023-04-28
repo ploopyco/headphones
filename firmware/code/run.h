@@ -125,7 +125,7 @@ static bool do_get_minimum(struct usb_setup_packet *);
 static bool do_get_maximum(struct usb_setup_packet *);
 static bool do_get_resolution(struct usb_setup_packet *);
 static void _audio_reconfigure(void);
-static void audio_set_volume(int16_t);
+static void audio_set_volume(int8_t, int16_t);
 static void audio_cmd_packet(struct usb_endpoint *);
 static bool as_set_alternate(struct usb_interface *, uint);
 static bool do_set_current(struct usb_setup_packet *);
