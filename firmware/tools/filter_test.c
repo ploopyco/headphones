@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
         out[i] = in[i];
     }
 
-    for (int j = 0; j < FILTER_STAGES; j++)
+    for (int j = 0; j < filter_stages; j++)
     {
         for (int i = 0; i < samples; i ++)
         {

@@ -106,7 +106,7 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     multicore_fifo_push_blocking(CORE0_READY);
     multicore_fifo_push_blocking(samples);
 
-    for (int j = 0; j < FILTER_STAGES; j++) {
+    for (int j = 0; j < filter_stages; j++) {
         // Left channel filter
         for (int i = 0; i < samples; i += 2) {
             fix16_t x_f16 = fix16_from_int((int16_t) out[i]);
@@ -128,6 +128,23 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     usb_packet_done(ep);
 }
 
+static void update_volume()
+{
+    if (audio_state._volume != audio_state._target_volume) {
+        // PCM3060 volume attenuation:
+        //  0: 0db (default)
+        //  55: -100db
+        //  56..: Mute
+        uint8_t buf[3];
+        buf[0] = 65;    // register addr
+        buf[1] = 255 + (audio_state.target_volume[0] / 128); // data left
+        buf[2] = 255 + (audio_state.target_volume[1] / 128); // data right
+        i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 3, false);
+
+        audio_state._volume = audio_state._target_volume;
+    }
+}
+
 void core1_entry() {
     uint8_t *userbuf = (uint8_t *) multicore_fifo_pop_blocking();
     int32_t *out = (int32_t *) userbuf;
@@ -142,7 +159,7 @@ void core1_entry() {
         
         uint32_t limit = multicore_fifo_pop_blocking();
 
-        for (int j = 0; j < FILTER_STAGES; j++) {
+        for (int j = 0; j < filter_stages; j++) {
             for (int i = 1; i < limit; i += 2) {
                 fix16_t x_f16 = fix16_from_int((int16_t) out[i]);
 
@@ -159,26 +176,13 @@ void core1_entry() {
         // Update the volume if required. We do this from core1 as
         // core0 is more heavily loaded, doing this from core0 can
         // lead to audio crackling.
-        if (audio_state._volume != audio_state._target_volume) {
-            // PCM3060 volume attenuation:
-            //  0: 0db (default)
-            //  55: -100db
-            //  56..: Mute
-            uint8_t buf[3];
-            buf[0] = 65;    // register addr
-            buf[1] = 255 + (audio_state.target_volume[0] / 128); // data left
-            buf[2] = 255 + (audio_state.target_volume[1] / 128); // data right
-            i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 3, false);
-
-            audio_state._volume = audio_state._target_volume;
-        }
+        update_volume();
     }
 }
 
 void setup() {
     set_sys_clock_khz(SYSTEM_FREQ / 1000, true);
     sleep_ms(100);
-    // stdio_init_all();
 
     userbuf = malloc(sizeof(uint8_t) * RINGBUF_LEN_IN_BYTES);
     
@@ -532,8 +536,7 @@ static bool do_get_current(struct usb_setup_packet *setup) {
                 else if (cn == AUDIO_CHANNEL_RIGHT_FRONT) {
                     usb_start_tiny_control_in_transfer(audio_state.target_volume[1], 2);
                 }
-                else
-                {
+                else {
                     return false;
                 }
                 return true;

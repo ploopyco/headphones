@@ -20,8 +20,10 @@
 
 #include "bqf.h"
 
+// In reality we do not have enough CPU resource to run 8 filtering
+// stages without some optimisation.
 #define MAX_FILTER_STAGES 8
-extern int FILTER_STAGES;
+extern int filter_stages;
 
 extern bqf_coeff_t bqf_filters_left[MAX_FILTER_STAGES];
 extern bqf_coeff_t bqf_filters_right[MAX_FILTER_STAGES];

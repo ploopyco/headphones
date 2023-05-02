@@ -19,7 +19,7 @@
 #include "bqf.h"
 #include "run.h"
 
-int FILTER_STAGES = 0;
+int filter_stages = 0;
 
 /*****************************************************************************
  * Here is where your digital signal processing journey begins. Follow this
@@ -33,32 +33,32 @@ int FILTER_STAGES = 0;
 
 void define_filters() {
     // First filter.
-    bqf_memreset(&bqf_filters_mem_left[FILTER_STAGES]);
-    bqf_memreset(&bqf_filters_mem_right[FILTER_STAGES]);
-    bqf_peaking_config(SAMPLING_FREQ, 38.0, -19.0, 0.9, &bqf_filters_left[FILTER_STAGES]);
-    bqf_peaking_config(SAMPLING_FREQ, 38.0, -19.0, 0.9, &bqf_filters_right[FILTER_STAGES++]);
+    bqf_memreset(&bqf_filters_mem_left[filter_stages]);
+    bqf_memreset(&bqf_filters_mem_right[filter_stages]);
+    bqf_peaking_config(SAMPLING_FREQ, 38.0, -19.0, 0.9, &bqf_filters_left[filter_stages]);
+    bqf_peaking_config(SAMPLING_FREQ, 38.0, -19.0, 0.9, &bqf_filters_right[filter_stages++]);
     
     // Second filter.
-    bqf_memreset(&bqf_filters_mem_left[FILTER_STAGES]);
-    bqf_memreset(&bqf_filters_mem_right[FILTER_STAGES]);
-    bqf_lowshelf_config(SAMPLING_FREQ, 2900.0, 3.0, 4.0, &bqf_filters_left[FILTER_STAGES]);
-    bqf_lowshelf_config(SAMPLING_FREQ, 2900.0, 3.0, 4.0, &bqf_filters_right[FILTER_STAGES++]);
+    bqf_memreset(&bqf_filters_mem_left[filter_stages]);
+    bqf_memreset(&bqf_filters_mem_right[filter_stages]);
+    bqf_lowshelf_config(SAMPLING_FREQ, 2900.0, 3.0, 4.0, &bqf_filters_left[filter_stages]);
+    bqf_lowshelf_config(SAMPLING_FREQ, 2900.0, 3.0, 4.0, &bqf_filters_right[filter_stages++]);
 
     // Third filter.
-    bqf_memreset(&bqf_filters_mem_left[FILTER_STAGES]);
-    bqf_memreset(&bqf_filters_mem_right[FILTER_STAGES]);
-    bqf_peaking_config(SAMPLING_FREQ, 430.0, 6.0, 3.5, &bqf_filters_left[FILTER_STAGES]);
-    bqf_peaking_config(SAMPLING_FREQ, 430.0, 6.0, 3.5, &bqf_filters_right[FILTER_STAGES++]);
+    bqf_memreset(&bqf_filters_mem_left[filter_stages]);
+    bqf_memreset(&bqf_filters_mem_right[filter_stages]);
+    bqf_peaking_config(SAMPLING_FREQ, 430.0, 6.0, 3.5, &bqf_filters_left[filter_stages]);
+    bqf_peaking_config(SAMPLING_FREQ, 430.0, 6.0, 3.5, &bqf_filters_right[filter_stages++]);
 
     // Fourth filter.
-    bqf_memreset(&bqf_filters_mem_left[FILTER_STAGES]);
-    bqf_memreset(&bqf_filters_mem_right[FILTER_STAGES]);
-    bqf_highshelf_config(SAMPLING_FREQ, 8400.0, 3.0, 4.0, &bqf_filters_left[FILTER_STAGES]);
-    bqf_highshelf_config(SAMPLING_FREQ, 8400.0, 3.0, 4.0, &bqf_filters_right[FILTER_STAGES++]);
+    bqf_memreset(&bqf_filters_mem_left[filter_stages]);
+    bqf_memreset(&bqf_filters_mem_right[filter_stages]);
+    bqf_highshelf_config(SAMPLING_FREQ, 8400.0, 3.0, 4.0, &bqf_filters_left[filter_stages]);
+    bqf_highshelf_config(SAMPLING_FREQ, 8400.0, 3.0, 4.0, &bqf_filters_right[filter_stages++]);
 
     // Fifth filter.
-    bqf_memreset(&bqf_filters_mem_left[FILTER_STAGES]);
-    bqf_memreset(&bqf_filters_mem_right[FILTER_STAGES]);
-    bqf_peaking_config(SAMPLING_FREQ, 4800.0, 6.0, 5.0, &bqf_filters_left[FILTER_STAGES]);
-    bqf_peaking_config(SAMPLING_FREQ, 4800.0, 6.0, 5.0, &bqf_filters_right[FILTER_STAGES++]);
+    bqf_memreset(&bqf_filters_mem_left[filter_stages]);
+    bqf_memreset(&bqf_filters_mem_right[filter_stages]);
+    bqf_peaking_config(SAMPLING_FREQ, 4800.0, 6.0, 5.0, &bqf_filters_left[filter_stages]);
+    bqf_peaking_config(SAMPLING_FREQ, 4800.0, 6.0, 5.0, &bqf_filters_right[filter_stages++]);
 }
