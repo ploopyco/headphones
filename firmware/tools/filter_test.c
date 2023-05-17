@@ -4,10 +4,10 @@
 #include "fix16.h"
 #include "user.h"
 
-bqf_coeff_t bqf_filters_left[FILTER_STAGES];
-bqf_coeff_t bqf_filters_right[FILTER_STAGES];
-bqf_mem_t bqf_filters_mem_left[FILTER_STAGES];
-bqf_mem_t bqf_filters_mem_right[FILTER_STAGES];
+bqf_coeff_t bqf_filters_left[MAX_FILTER_STAGES];
+bqf_coeff_t bqf_filters_right[MAX_FILTER_STAGES];
+bqf_mem_t bqf_filters_mem_left[MAX_FILTER_STAGES];
+bqf_mem_t bqf_filters_mem_right[MAX_FILTER_STAGES];
 
 const char* usage = "Usage: %s INFILE OUTFILE\n\n"
     "Reads 16bit stereo PCM data from INFILE, runs it through the Ploopy headphones\n"
@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
         out[i] = in[i];
     }
 
-    for (int j = 0; j < FILTER_STAGES; j++)
+    for (int j = 0; j < filter_stages; j++)
     {
         for (int i = 0; i < samples; i ++)
         {

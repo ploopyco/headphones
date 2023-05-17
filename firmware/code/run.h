@@ -40,10 +40,10 @@
 
 #define ENCODE_DB(x) ((uint16_t)(int16_t)((x)*256))
 
-#define MIN_VOLUME ENCODE_DB(-CENTER_VOLUME_INDEX)
+#define MIN_VOLUME ENCODE_DB(-100)
 #define DEFAULT_VOLUME ENCODE_DB(0)
-#define MAX_VOLUME ENCODE_DB(count_of(db_to_vol)-CENTER_VOLUME_INDEX)
-#define VOLUME_RESOLUTION ENCODE_DB(1)
+#define MAX_VOLUME ENCODE_DB(0)
+#define VOLUME_RESOLUTION ENCODE_DB(0.5f)
 
 typedef struct _audio_device_config {
     struct usb_configuration_descriptor descriptor;
@@ -125,7 +125,7 @@ static bool do_get_minimum(struct usb_setup_packet *);
 static bool do_get_maximum(struct usb_setup_packet *);
 static bool do_get_resolution(struct usb_setup_packet *);
 static void _audio_reconfigure(void);
-static void audio_set_volume(int16_t);
+static void audio_set_volume(int8_t, int16_t);
 static void audio_cmd_packet(struct usb_endpoint *);
 static bool as_set_alternate(struct usb_interface *, uint);
 static bool do_set_current(struct usb_setup_packet *);
