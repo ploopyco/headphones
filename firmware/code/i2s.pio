@@ -20,15 +20,15 @@
 set x, 30                   side 0b00
 
 left_channel:
-    in pins, 1              side 0b01
-    jmp x-- left_channel    side 0b00
+    in pins, 1              side 0b11
+    jmp x-- left_channel    side 0b10
     in pins, 1              side 0b11
 
 set x, 30                   side 0b10
 
 right_channel:
-    in pins, 1              side 0b11
-    jmp x--, right_channel  side 0b10
+    in pins, 1              side 0b01
+    jmp x--, right_channel  side 0b00
     in pins, 1              side 0b01
 
 
@@ -38,13 +38,13 @@ right_channel:
 set x, 30                   side 0b01
 
 left_channel:
-    out pins, 1             side 0b00
-    jmp x-- left_channel    side 0b01
+    out pins, 1             side 0b10
+    jmp x-- left_channel    side 0b11
     out pins, 1             side 0b10
 
 set x, 30                   side 0b11
 
 right_channel:
-    out pins, 1             side 0b10
-    jmp x--, right_channel  side 0b11
+    out pins, 1             side 0b00
+    jmp x--, right_channel  side 0b01
     out pins, 1             side 0b00
