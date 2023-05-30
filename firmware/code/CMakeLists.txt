@@ -17,6 +17,7 @@ add_executable(ploopy_headphones
     fix16.c
     bqf.c
     user.c
+    configuration_manager.c
 )
 
 target_include_directories(ploopy_headphones PRIVATE ${CMAKE_SOURCE_DIR})
@@ -49,5 +50,6 @@ target_link_libraries(ploopy_headphones
     hardware_sync
     pico_stdlib
     pico_multicore
+    pico_unique_id
     usb_device
 )

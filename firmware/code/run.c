@@ -33,8 +33,10 @@
 
 #include "pico/stdlib.h"
 #include "pico/usb_device.h"
+#include "pico/usb_stream_helper.h"
 #include "pico/multicore.h"
 #include "pico/bootrom.h"
+#include "pico/unique_id.h"
 #include "AudioClassCommon.h"
 
 #include "run.h"
@@ -42,6 +44,7 @@
 #include "i2s.h"
 #include "bqf.h"
 #include "user.h"
+#include "configuration_manager.h"
 
 i2s_obj_t i2s_write_obj;
 static uint8_t *userbuf;
@@ -66,8 +69,11 @@ static struct {
     .freq = 48000,
 };
 
+static char spi_serial_number[17] = "";
+
 enum vendor_cmds {
-    REBOOT_BOOTLOADER = 0
+    REBOOT_BOOTLOADER = 0,
+    MICROSOFT_COMPATIBLE_ID_FEATURE_DESRIPTOR
 };
 
 int main(void) {
@@ -183,6 +189,11 @@ void core1_entry() {
 void setup() {
     set_sys_clock_khz(SYSTEM_FREQ / 1000, true);
     sleep_ms(100);
+    stdio_init_all();
+
+    pico_get_unique_board_id_string(spi_serial_number, 17);
+    descriptor_strings[2] = spi_serial_number;
+    printf("Serial Number: %s (%p)\n", descriptor_strings[2], descriptor_strings[2]);
 
     userbuf = malloc(sizeof(uint8_t) * RINGBUF_LEN_IN_BYTES);
     
@@ -296,7 +307,7 @@ static const audio_device_config ad_conf = {
         .bLength = sizeof(ad_conf.descriptor),
         .bDescriptorType = DTYPE_Configuration,
         .wTotalLength = sizeof(ad_conf),
-        .bNumInterfaces = 2,
+        .bNumInterfaces = 3,
         .bConfigurationValue = 0x01,
         .iConfiguration = 0x00,
         .bmAttributes = 0x80,
@@ -439,16 +450,45 @@ static const audio_device_config ad_conf = {
         .bRefresh = 2,
         .bSyncAddr = 0,
     },
+    .configuration_interface = {
+        .bLength = sizeof(ad_conf.configuration_interface),
+        .bDescriptorType = DTYPE_Interface,
+        .bInterfaceNumber = 0x02,
+        .bAlternateSetting = 0x00,
+        .bNumEndpoints = 0x02,
+        .bInterfaceClass = 0xff, // Vendor Specific
+        .bInterfaceSubClass = 0,
+        .bInterfaceProtocol = 0,
+        .iInterface = 0x00
+    },
+    .ep3 = {
+        .bLength = sizeof(ad_conf.ep3),
+        .bDescriptorType = 0x05,
+        .bEndpointAddress = 0x03,
+        .bmAttributes = 0x2,
+        .wMaxPacketSize = 0x40,
+        .bInterval = 0x0
+    },
+    .ep4 = {
+        .bLength = sizeof(ad_conf.ep3),
+        .bDescriptorType = 0x05,
+        .bEndpointAddress = 0x84,
+        .bmAttributes = 0x2,
+        .wMaxPacketSize = 0x40,
+        .bInterval = 0x0
+    }
 };
 
 static struct usb_interface ac_interface;
 static struct usb_interface as_op_interface;
 static struct usb_endpoint ep_op_out, ep_op_sync;
+static struct usb_interface configuration_interface;
+static struct usb_endpoint ep_configuration_in, ep_configuration_out;
 
 static const struct usb_device_descriptor boot_device_descriptor = {
     .bLength            = 18,
     .bDescriptorType    = 0x01,
-    .bcdUSB             = 0x0110,
+    .bcdUSB             = 0x0210,
     .bDeviceClass       = 0x00,
     .bDeviceSubClass    = 0x00,
     .bDeviceProtocol    = 0x00,
@@ -519,6 +559,19 @@ static const struct usb_transfer_type as_sync_transfer_type = {
 
 static struct usb_transfer as_transfer;
 static struct usb_transfer as_sync_transfer;
+
+static const struct usb_transfer_type config_in_transfer_type = {
+    .on_packet = config_in_packet,
+    .initial_packet_count = 1,
+};
+
+static const struct usb_transfer_type config_out_transfer_type = {
+    .on_packet = config_out_packet,
+    .initial_packet_count = 1,
+};
+
+static struct usb_transfer config_in_transfer;
+static struct usb_transfer config_out_transfer;
 
 static bool do_get_current(struct usb_setup_packet *setup) {
     if ((setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
@@ -693,8 +746,112 @@ static bool do_set_current(struct usb_setup_packet *setup) {
     return false;
 }
 
+static void _tf_send_control_in_ack(__unused struct usb_endpoint *endpoint, __unused struct usb_transfer *transfer) {
+    assert(endpoint == &usb_control_in);
+    assert(transfer == &_control_in_transfer);
+    usb_debug("_tf_setup_control_ack\n");
+    static struct usb_transfer _control_out_transfer;
+    usb_start_empty_transfer(usb_get_control_out_endpoint(), &_control_out_transfer, 0);
+}
+
+static struct usb_stream_transfer _control_in_stream_transfer;
+#define _control_in_transfer _control_in_stream_transfer.core
+static struct usb_stream_transfer_funcs control_stream_funcs = {
+        .on_chunk = usb_stream_noop_on_chunk,
+        .on_packet_complete = usb_stream_noop_on_packet_complete
+};
+
+
+#define TU_U16_HIGH(_u16)      ((uint8_t) (((_u16) >> 8) & 0x00ff))
+#define TU_U16_LOW(_u16)       ((uint8_t) ((_u16)       & 0x00ff))
+#define U16_TO_U8S_BE(_u16)    TU_U16_HIGH(_u16), TU_U16_LOW(_u16)
+#define U16_TO_U8S_LE(_u16)    TU_U16_LOW(_u16), TU_U16_HIGH(_u16)
+#define TU_U32_BYTE3(_u32)     ((uint8_t) ((((uint32_t) _u32) >> 24) & 0x000000ff)) // MSB
+#define TU_U32_BYTE2(_u32)     ((uint8_t) ((((uint32_t) _u32) >> 16) & 0x000000ff))
+#define TU_U32_BYTE1(_u32)     ((uint8_t) ((((uint32_t) _u32) >>  8) & 0x000000ff))
+#define TU_U32_BYTE0(_u32)     ((uint8_t) (((uint32_t)  _u32)        & 0x000000ff)) // LSB
+
+#define U32_TO_U8S_BE(_u32)    TU_U32_BYTE3(_u32), TU_U32_BYTE2(_u32), TU_U32_BYTE1(_u32), TU_U32_BYTE0(_u32)
+#define U32_TO_U8S_LE(_u32)    TU_U32_BYTE0(_u32), TU_U32_BYTE1(_u32), TU_U32_BYTE2(_u32), TU_U32_BYTE3(_u32)
+
+#define MS_OS_20_DESC_LEN  0xB2
+
+typedef enum
+{
+  MS_OS_20_SET_HEADER_DESCRIPTOR       = 0x00,
+  MS_OS_20_SUBSET_HEADER_CONFIGURATION = 0x01,
+  MS_OS_20_SUBSET_HEADER_FUNCTION      = 0x02,
+  MS_OS_20_FEATURE_COMPATBLE_ID        = 0x03,
+  MS_OS_20_FEATURE_REG_PROPERTY        = 0x04,
+  MS_OS_20_FEATURE_MIN_RESUME_TIME     = 0x05,
+  MS_OS_20_FEATURE_MODEL_ID            = 0x06,
+  MS_OS_20_FEATURE_CCGP_DEVICE         = 0x07,
+  MS_OS_20_FEATURE_VENDOR_REVISION     = 0x08
+} microsoft_os_20_type_t;
+
+uint8_t desc_ms_os_20[256] =
+{
+  // Set header: length, type, windows version, total length
+  U16_TO_U8S_LE(0x000A), U16_TO_U8S_LE(MS_OS_20_SET_HEADER_DESCRIPTOR), U32_TO_U8S_LE(0x06030000), U16_TO_U8S_LE(MS_OS_20_DESC_LEN),
+
+  // Configuration subset header: length, type, configuration index, reserved, configuration total length
+  U16_TO_U8S_LE(0x0008), U16_TO_U8S_LE(MS_OS_20_SUBSET_HEADER_CONFIGURATION), 0, 0, U16_TO_U8S_LE(MS_OS_20_DESC_LEN-0x0A),
+
+  // Function Subset header: length, type, first interface, reserved, subset length
+  U16_TO_U8S_LE(0x0008), U16_TO_U8S_LE(MS_OS_20_SUBSET_HEADER_FUNCTION), 2  /*interface*/, 0, U16_TO_U8S_LE(MS_OS_20_DESC_LEN-0x0A-0x08),
+
+  // MS OS 2.0 Compatible ID descriptor: length, type, compatible ID, sub compatible ID
+  U16_TO_U8S_LE(0x0014), U16_TO_U8S_LE(MS_OS_20_FEATURE_COMPATBLE_ID), 'W', 'I', 'N', 'U', 'S', 'B', 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // sub-compatible
+
+  // MS OS 2.0 Registry property descriptor: length, type
+  U16_TO_U8S_LE(MS_OS_20_DESC_LEN-0x0A-0x08-0x08-0x14), U16_TO_U8S_LE(MS_OS_20_FEATURE_REG_PROPERTY),
+  U16_TO_U8S_LE(0x0007), U16_TO_U8S_LE(0x002A), // wPropertyDataType, wPropertyNameLength and PropertyName "DeviceInterfaceGUIDs\0" in UTF-16
+  'D', 0x00, 'e', 0x00, 'v', 0x00, 'i', 0x00, 'c', 0x00, 'e', 0x00, 'I', 0x00, 'n', 0x00, 't', 0x00, 'e', 0x00,
+  'r', 0x00, 'f', 0x00, 'a', 0x00, 'c', 0x00, 'e', 0x00, 'G', 0x00, 'U', 0x00, 'I', 0x00, 'D', 0x00, 's', 0x00, 0x00, 0x00,
+  U16_TO_U8S_LE(0x0050), // wPropertyDataLength
+	//bPropertyData: “{E8379B1D-6AA3-F426-2EAE-83D18090CA79}”.
+  '{', 0x00, 'E', 0x00, '8', 0x00, '3', 0x00, '7', 0x00, '9', 0x00, 'B', 0x00, '1', 0x00, 'D', 0x00, '-', 0x00,
+  '6', 0x00, 'A', 0x00, 'A', 0x00, '3', 0x00, '-', 0x00, 'F', 0x00, '4', 0x00, '2', 0x00, '6', 0x00, '-', 0x00,
+  '2', 0x00, 'E', 0x00, 'A', 0x00, 'E', 0x00, '-', 0x00, '8', 0x00, '3', 0x00, 'D', 0x00, '1', 0x00, '8', 0x00,
+  '0', 0x00, '9', 0x00, '0', 0x00, 'C', 0x00, 'A', 0x00, '7', 0x00, '9', 0x00, '}', 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
 static bool ad_setup_request_handler(__unused struct usb_device *device, struct usb_setup_packet *setup) {
     setup = __builtin_assume_aligned(setup, 4);
+    printf("ad_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
+
+    if (setup->bmRequestType & USB_DIR_IN) {
+        if (USB_REQ_TYPE_RECIPIENT_DEVICE == (setup->bmRequestType & USB_REQ_TYPE_TYPE_MASK)) {
+            printf("Device request %x\n", (setup->wValue >> 8));
+            if ((setup->bRequest == USB_REQUEST_GET_DESCRIPTOR) && ((setup->wValue >> 8) == 0xF /* BOS */)) {
+                printf("Request BOS descriptor, idx %d\n", setup->wValue & 0xFF);
+
+                struct usb_endpoint *usb_control_in = usb_get_control_in_endpoint();
+                static __aligned(4) uint8_t descriptor_buf[PICO_USBDEV_MAX_DESCRIPTOR_SIZE] = {
+                    0x5, 0xF, 0x21, 0x0, 0x1,
+                    0x1C, 0x10, 0x5, 0x00,
+                    0xDF, 0x60, 0xDD, 0xD8, 0x89, 0x45, 0xC7, 0x4C, 0x9C, 0xD2, 0x65, 0x9D, 0x9E, 0x64, 0x8A, 0x9F,
+                    0x0, 0x0, 0x3, 0x6,
+                    U16_TO_U8S_LE(MS_OS_20_DESC_LEN),  // TODO: len
+                    0x1,
+                    0x0 };
+                static struct usb_stream_transfer_funcs control_stream_funcs = {
+                        .on_chunk = usb_stream_noop_on_chunk,
+                        .on_packet_complete = usb_stream_noop_on_packet_complete
+                };
+                int len = 0x21;
+
+                len = MIN(len, setup->wLength);
+                usb_stream_setup_transfer(&_control_in_stream_transfer, &control_stream_funcs, descriptor_buf,
+                                            sizeof(descriptor_buf), len, _tf_send_control_in_ack);
+
+                _control_in_stream_transfer.ep = usb_control_in;
+                usb_start_transfer(usb_control_in, &_control_in_stream_transfer.core);
+                return true;
+            }
+        }
+    }
     if (USB_REQ_TYPE_TYPE_VENDOR == (setup->bmRequestType & USB_REQ_TYPE_TYPE_MASK)) {
         // To prevent badly behaving software from accidentally triggering a reboot, e expect
         // the wValue to be equal to the Ploopy vendor id.
@@ -703,12 +860,36 @@ static bool ad_setup_request_handler(__unused struct usb_device *device, struct 
             // reset_usb_boot does not return, so we will not respond to this command.
             return true;
         }
+        else if (USB_REQ_TYPE_RECIPIENT_DEVICE == (setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) && setup->bRequest == MICROSOFT_COMPATIBLE_ID_FEATURE_DESRIPTOR && setup->wIndex == 0x7)
+        {
+            const int length = MIN(MS_OS_20_DESC_LEN, setup->wLength);
+
+            printf("Sending %u bytes (%u %u)\n", length, MS_OS_20_DESC_LEN, sizeof(desc_ms_os_20));
+
+            struct usb_endpoint *usb_control_in = usb_get_control_in_endpoint();
+            usb_stream_setup_transfer(&_control_in_stream_transfer, &control_stream_funcs, desc_ms_os_20,
+                            sizeof(desc_ms_os_20), length, _tf_send_control_in_ack);
+
+            _control_in_stream_transfer.ep = usb_control_in;
+            usb_start_transfer(usb_control_in, &_control_in_stream_transfer.core);
+
+            return true;
+        }
     }
+    return false;
+}
+
+static struct usb_stream_transfer _config_in_stream_transfer;
+static bool configuration_interface_setup_request_handler(__unused struct usb_interface *interface, struct usb_setup_packet *setup) {
+    setup = __builtin_assume_aligned(setup, 4);
+    printf("configuration_interface_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
     return false;
 }
 
 static bool ac_setup_request_handler(__unused struct usb_interface *interface, struct usb_setup_packet *setup) {
     setup = __builtin_assume_aligned(setup, 4);
+    printf("ac_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
+
     if (USB_REQ_TYPE_TYPE_CLASS == (setup->bmRequestType & USB_REQ_TYPE_TYPE_MASK)) {
         switch (setup->bRequest) {
             case AUDIO_REQ_SetCurrent:
@@ -735,6 +916,8 @@ static bool ac_setup_request_handler(__unused struct usb_interface *interface, s
 
 bool _as_setup_request_handler(__unused struct usb_endpoint *ep, struct usb_setup_packet *setup) {
     setup = __builtin_assume_aligned(setup, 4);
+    printf("as_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
+
     if (USB_REQ_TYPE_TYPE_CLASS == (setup->bmRequestType & USB_REQ_TYPE_TYPE_MASK)) {
         switch (setup->bRequest) {
             case AUDIO_REQ_SetCurrent:
@@ -777,9 +960,22 @@ void usb_sound_card_init() {
     as_sync_transfer.type = &as_sync_transfer_type;
     usb_set_default_transfer(&ep_op_sync, &as_sync_transfer);
 
+
+    static struct usb_endpoint *const configuration_endpoints[] = {
+        &ep_configuration_out, &ep_configuration_in
+    };
+    usb_interface_init(&configuration_interface, &ad_conf.configuration_interface, configuration_endpoints, 2, true);
+    configuration_interface.setup_request_handler = configuration_interface_setup_request_handler;
+
+    config_in_transfer.type = &config_in_transfer_type;
+    usb_set_default_transfer(&ep_configuration_in, &config_in_transfer);
+    config_out_transfer.type = &config_out_transfer_type;
+    usb_set_default_transfer(&ep_configuration_out, &config_out_transfer);
+
     static struct usb_interface *const boot_device_interfaces[] = {
         &ac_interface,
         &as_op_interface,
+        &configuration_interface
     };
 
     __unused struct usb_device *device = usb_device_init(&boot_device_descriptor,

@@ -68,12 +68,16 @@ typedef struct _audio_device_config {
         USB_Audio_StdDescriptor_StreamEndpoint_Spc_t audio;
     } ep1;
     struct usb_endpoint_descriptor_long ep2;
+
+    struct usb_interface_descriptor configuration_interface;
+    struct usb_endpoint_descriptor ep3;
+    struct usb_endpoint_descriptor ep4;
 } audio_device_config;
 
 static char *descriptor_strings[] = {
     "Ploopy Corporation",
     "Ploopy Headphones",
-    "000000000001"
+    "0000000000000001" // Dummy serial number, will be overwritten with the value read from the SPI flash chip. Must be 17bytes.
 };
 
 /*****************************************************************************
