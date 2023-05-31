@@ -1,3 +1,11 @@
+## There are three different firmwares available.
+
+Do you see that button on this Github page that says "master"? That allows you to select branches. Different branches have different firmwares.
+
+- The "master" branch has the default firmware.
+- The "ploopyco/left-right-reverse" firmware has firmware that flips the left and right channels.
+- The "ploopyco/distortion-cut" firmware has firmware that experiences less digital distortion, though it is less loud overall.
+
 ## BEFORE YOU FLASH PM8:
 
 pm8 includes significant changes from pm7. It is quite likely that you'll need to make your computer "forget" or "uninstall" the USB entry for the Ploopy Headphones before pm8 works correctly. What does "not working correctly" sound like? Volume adjustment will probably not work at all, the left and right channels may play independently of one another, and there won't be individual volume controls available for the left and right channel, amongst other things.
