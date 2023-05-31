@@ -44,6 +44,7 @@
 #include "i2s.h"
 #include "bqf.h"
 #include "user.h"
+#include "os_descriptors.h"
 #include "configuration_manager.h"
 
 i2s_obj_t i2s_write_obj;
@@ -761,62 +762,6 @@ static struct usb_stream_transfer_funcs control_stream_funcs = {
         .on_packet_complete = usb_stream_noop_on_packet_complete
 };
 
-
-#define TU_U16_HIGH(_u16)      ((uint8_t) (((_u16) >> 8) & 0x00ff))
-#define TU_U16_LOW(_u16)       ((uint8_t) ((_u16)       & 0x00ff))
-#define U16_TO_U8S_BE(_u16)    TU_U16_HIGH(_u16), TU_U16_LOW(_u16)
-#define U16_TO_U8S_LE(_u16)    TU_U16_LOW(_u16), TU_U16_HIGH(_u16)
-#define TU_U32_BYTE3(_u32)     ((uint8_t) ((((uint32_t) _u32) >> 24) & 0x000000ff)) // MSB
-#define TU_U32_BYTE2(_u32)     ((uint8_t) ((((uint32_t) _u32) >> 16) & 0x000000ff))
-#define TU_U32_BYTE1(_u32)     ((uint8_t) ((((uint32_t) _u32) >>  8) & 0x000000ff))
-#define TU_U32_BYTE0(_u32)     ((uint8_t) (((uint32_t)  _u32)        & 0x000000ff)) // LSB
-
-#define U32_TO_U8S_BE(_u32)    TU_U32_BYTE3(_u32), TU_U32_BYTE2(_u32), TU_U32_BYTE1(_u32), TU_U32_BYTE0(_u32)
-#define U32_TO_U8S_LE(_u32)    TU_U32_BYTE0(_u32), TU_U32_BYTE1(_u32), TU_U32_BYTE2(_u32), TU_U32_BYTE3(_u32)
-
-#define MS_OS_20_DESC_LEN  0xB2
-
-typedef enum
-{
-  MS_OS_20_SET_HEADER_DESCRIPTOR       = 0x00,
-  MS_OS_20_SUBSET_HEADER_CONFIGURATION = 0x01,
-  MS_OS_20_SUBSET_HEADER_FUNCTION      = 0x02,
-  MS_OS_20_FEATURE_COMPATBLE_ID        = 0x03,
-  MS_OS_20_FEATURE_REG_PROPERTY        = 0x04,
-  MS_OS_20_FEATURE_MIN_RESUME_TIME     = 0x05,
-  MS_OS_20_FEATURE_MODEL_ID            = 0x06,
-  MS_OS_20_FEATURE_CCGP_DEVICE         = 0x07,
-  MS_OS_20_FEATURE_VENDOR_REVISION     = 0x08
-} microsoft_os_20_type_t;
-
-uint8_t desc_ms_os_20[256] =
-{
-  // Set header: length, type, windows version, total length
-  U16_TO_U8S_LE(0x000A), U16_TO_U8S_LE(MS_OS_20_SET_HEADER_DESCRIPTOR), U32_TO_U8S_LE(0x06030000), U16_TO_U8S_LE(MS_OS_20_DESC_LEN),
-
-  // Configuration subset header: length, type, configuration index, reserved, configuration total length
-  U16_TO_U8S_LE(0x0008), U16_TO_U8S_LE(MS_OS_20_SUBSET_HEADER_CONFIGURATION), 0, 0, U16_TO_U8S_LE(MS_OS_20_DESC_LEN-0x0A),
-
-  // Function Subset header: length, type, first interface, reserved, subset length
-  U16_TO_U8S_LE(0x0008), U16_TO_U8S_LE(MS_OS_20_SUBSET_HEADER_FUNCTION), 2  /*interface*/, 0, U16_TO_U8S_LE(MS_OS_20_DESC_LEN-0x0A-0x08),
-
-  // MS OS 2.0 Compatible ID descriptor: length, type, compatible ID, sub compatible ID
-  U16_TO_U8S_LE(0x0014), U16_TO_U8S_LE(MS_OS_20_FEATURE_COMPATBLE_ID), 'W', 'I', 'N', 'U', 'S', 'B', 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // sub-compatible
-
-  // MS OS 2.0 Registry property descriptor: length, type
-  U16_TO_U8S_LE(MS_OS_20_DESC_LEN-0x0A-0x08-0x08-0x14), U16_TO_U8S_LE(MS_OS_20_FEATURE_REG_PROPERTY),
-  U16_TO_U8S_LE(0x0007), U16_TO_U8S_LE(0x002A), // wPropertyDataType, wPropertyNameLength and PropertyName "DeviceInterfaceGUIDs\0" in UTF-16
-  'D', 0x00, 'e', 0x00, 'v', 0x00, 'i', 0x00, 'c', 0x00, 'e', 0x00, 'I', 0x00, 'n', 0x00, 't', 0x00, 'e', 0x00,
-  'r', 0x00, 'f', 0x00, 'a', 0x00, 'c', 0x00, 'e', 0x00, 'G', 0x00, 'U', 0x00, 'I', 0x00, 'D', 0x00, 's', 0x00, 0x00, 0x00,
-  U16_TO_U8S_LE(0x0050), // wPropertyDataLength
-	//bPropertyData: “{E8379B1D-6AA3-F426-2EAE-83D18090CA79}”.
-  '{', 0x00, 'E', 0x00, '8', 0x00, '3', 0x00, '7', 0x00, '9', 0x00, 'B', 0x00, '1', 0x00, 'D', 0x00, '-', 0x00,
-  '6', 0x00, 'A', 0x00, 'A', 0x00, '3', 0x00, '-', 0x00, 'F', 0x00, '4', 0x00, '2', 0x00, '6', 0x00, '-', 0x00,
-  '2', 0x00, 'E', 0x00, 'A', 0x00, 'E', 0x00, '-', 0x00, '8', 0x00, '3', 0x00, 'D', 0x00, '1', 0x00, '8', 0x00,
-  '0', 0x00, '9', 0x00, '0', 0x00, 'C', 0x00, 'A', 0x00, '7', 0x00, '9', 0x00, '}', 0x00, 0x00, 0x00, 0x00, 0x00
-};
-
 static bool ad_setup_request_handler(__unused struct usb_device *device, struct usb_setup_packet *setup) {
     setup = __builtin_assume_aligned(setup, 4);
     printf("ad_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
@@ -828,14 +773,6 @@ static bool ad_setup_request_handler(__unused struct usb_device *device, struct 
                 printf("Request BOS descriptor, idx %d\n", setup->wValue & 0xFF);
 
                 struct usb_endpoint *usb_control_in = usb_get_control_in_endpoint();
-                static __aligned(4) uint8_t descriptor_buf[PICO_USBDEV_MAX_DESCRIPTOR_SIZE] = {
-                    0x5, 0xF, 0x21, 0x0, 0x1,
-                    0x1C, 0x10, 0x5, 0x00,
-                    0xDF, 0x60, 0xDD, 0xD8, 0x89, 0x45, 0xC7, 0x4C, 0x9C, 0xD2, 0x65, 0x9D, 0x9E, 0x64, 0x8A, 0x9F,
-                    0x0, 0x0, 0x3, 0x6,
-                    U16_TO_U8S_LE(MS_OS_20_DESC_LEN),  // TODO: len
-                    0x1,
-                    0x0 };
                 static struct usb_stream_transfer_funcs control_stream_funcs = {
                         .on_chunk = usb_stream_noop_on_chunk,
                         .on_packet_complete = usb_stream_noop_on_packet_complete
@@ -843,8 +780,8 @@ static bool ad_setup_request_handler(__unused struct usb_device *device, struct 
                 int len = 0x21;
 
                 len = MIN(len, setup->wLength);
-                usb_stream_setup_transfer(&_control_in_stream_transfer, &control_stream_funcs, descriptor_buf,
-                                            sizeof(descriptor_buf), len, _tf_send_control_in_ack);
+                usb_stream_setup_transfer(&_control_in_stream_transfer, &control_stream_funcs, ms_platform_capability_bos_descriptor,
+                                            sizeof(ms_platform_capability_bos_descriptor), len, _tf_send_control_in_ack);
 
                 _control_in_stream_transfer.ep = usb_control_in;
                 usb_start_transfer(usb_control_in, &_control_in_stream_transfer.core);
