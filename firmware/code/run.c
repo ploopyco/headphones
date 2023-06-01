@@ -194,8 +194,6 @@ void setup() {
 
     pico_get_unique_board_id_string(spi_serial_number, 17);
     descriptor_strings[2] = spi_serial_number;
-    printf("Serial Number: %s (%p)\n", descriptor_strings[2], descriptor_strings[2]);
-
     userbuf = malloc(sizeof(uint8_t) * RINGBUF_LEN_IN_BYTES);
     
     // Configure DAC PWM

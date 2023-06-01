@@ -1,19 +1,44 @@
+/**
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef __OS_DESCRIPTORS__
 #define __OS_DESCRIPTORS__
+/**
+ * This stuff is all required to get a WinUSB driver on the control interface on Windows.
+ * Without this it is impossible to communicate with the device using libusb.
+ *
+ * During device enumeration the OS will request the platform capability binary object store
+ * (BOS) descriptor. This descriptor contains a magic UUID which signals the device supports
+ * the Microsoft OS 2.0 capability descriptor. It also signals the "Vendor code" and the size
+ * of the Microsoft OS 2.0 capability descriptor.
+ * Next Windows will request the Microsoft OS 2.0 capability descriptor by issuing a device
+ * vendor setup request, with bRequest equal to the "Vendor code" from the BOS descriptor and
+ * wIndex == 7. We handle this in ad_setup_request_handler() in run.c.
+ */
 #include <stdint.h>
 
-#define TU_U16_HIGH(_u16)      ((uint8_t) (((_u16) >> 8) & 0x00ff))
-#define TU_U16_LOW(_u16)       ((uint8_t) ((_u16)       & 0x00ff))
-#define U16_TO_U8S_BE(_u16)    TU_U16_HIGH(_u16), TU_U16_LOW(_u16)
-#define U16_TO_U8S_LE(_u16)    TU_U16_LOW(_u16), TU_U16_HIGH(_u16)
-#define TU_U32_BYTE3(_u32)     ((uint8_t) ((((uint32_t) _u32) >> 24) & 0x000000ff)) // MSB
-#define TU_U32_BYTE2(_u32)     ((uint8_t) ((((uint32_t) _u32) >> 16) & 0x000000ff))
-#define TU_U32_BYTE1(_u32)     ((uint8_t) ((((uint32_t) _u32) >>  8) & 0x000000ff))
-#define TU_U32_BYTE0(_u32)     ((uint8_t) (((uint32_t)  _u32)        & 0x000000ff)) // LSB
+#define U16_HIGH(_u16)          ((uint8_t) (((_u16) >> 8) & 0x00ff))
+#define U16_LOW(_u16)           ((uint8_t) ((_u16)       & 0x00ff))
 
-#define U32_TO_U8S_BE(_u32)    TU_U32_BYTE3(_u32), TU_U32_BYTE2(_u32), TU_U32_BYTE1(_u32), TU_U32_BYTE0(_u32)
-#define U32_TO_U8S_LE(_u32)    TU_U32_BYTE0(_u32), TU_U32_BYTE1(_u32), TU_U32_BYTE2(_u32), TU_U32_BYTE3(_u32)
+#define U32_BYTE3(_u32)         ((uint8_t) ((((uint32_t) _u32) >> 24) & 0x000000ff)) // MSB
+#define U32_BYTE2(_u32)         ((uint8_t) ((((uint32_t) _u32) >> 16) & 0x000000ff))
+#define U32_BYTE1(_u32)         ((uint8_t) ((((uint32_t) _u32) >>  8) & 0x000000ff))
+#define U32_BYTE0(_u32)         ((uint8_t) (((uint32_t)  _u32)        & 0x000000ff)) // LSB
 
+#define U16_TO_U8S_LE(_u16)     U16_LOW(_u16), U16_HIGH(_u16)
+#define U32_TO_U8S_LE(_u32)     U32_BYTE0(_u32), U32_BYTE1(_u32), U32_BYTE2(_u32), U32_BYTE3(_u32)
 #define MS_OS_20_DESC_LEN  0xB2
 
 typedef enum {
@@ -28,6 +53,8 @@ typedef enum {
     MS_OS_20_FEATURE_VENDOR_REVISION     = 0x08
 } microsoft_os_20_type_t;
 
+// Warning: The USB stack expects these descriptors to be a multiple of 64 bytes. Also the offset
+// computation breaks down if the size is not a power of two.
 static __aligned(4) uint8_t ms_platform_capability_bos_descriptor[PICO_USBDEV_MAX_DESCRIPTOR_SIZE] = {
     // BOS Descriptor
     // length, descriptor type, total length, number of device caps
