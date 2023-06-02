@@ -17,16 +17,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
-#include "pico/stdlib.h"
-#include "pico/usb_device.h"
+#include <stdbool.h>
 #include "configuration_manager.h"
 #include "configuration_types.h"
-
-// TODO: Duplicated from os_descriptors.h
-#define U16_HIGH(_u16)          ((uint8_t) (((_u16) >> 8) & 0x00ff))
-#define U16_LOW(_u16)           ((uint8_t) ((_u16)       & 0x00ff))
-
-#define U16_TO_U8S_LE(_u16)     U16_LOW(_u16), U16_HIGH(_u16)
+#include "bqf.h"
+#include "run.h"
+#ifndef TEST_TARGET
+#include "pico/stdlib.h"
+#include "pico/usb_device.h"
+#include "hardware/flash.h"
+#endif
 
 /**
  * We have multiple copies of the device configuration. This is the factory
@@ -44,72 +44,71 @@
  * and becomes the new user configuration. 
  */
 static const default_configuration default_config = {
+    .set_configuration = { SET_CONFIGURATION, sizeof(default_config) },
     .filters = {
         .filter = { FILTER_CONFIGURATION, sizeof(default_config.filters) },
-        .f1 = {PEAKING,     38,   -19,  0.9},
-        .f2 = {LOWSHELF,    2900,   2,  0.7},
-        .f3 = {PEAKING,     430,    3,  3.5},
-        .f4 = {HIGHSHELF,   8400,   2,  0.7},
-        .f5 = {PEAKING,     4800,   3,    5}
+        .f1 = { PEAKING,    38,   -19,  0.9 },
+        .f2 = { LOWSHELF,   2900,   2,  0.7 },
+        .f3 = { PEAKING,    430,    3,  3.5 },
+        .f4 = { HIGHSHELF,  8400,   2,  0.7 },
+        .f5 = { PEAKING,    4800,   3,    5 }
     }
 };
 
+// Grab the last 4k page of flash for our configuration strutures.
+#ifndef TEST_TARGET
+static const size_t USER_CONFIGURATION_OFFSET = PICO_FLASH_SIZE_BYTES - 0x1000;
+static const uint8_t *user_configuration = (const uint8_t *) (XIP_BASE + USER_CONFIGURATION_OFFSET);
+#endif
 /**
  * TODO: For now, assume we always get a complete configuration but maybe we
  * should handle merging configurations where, for example, only a new
  * filter_configuration_tlv was received.
  */
-static uint8_t working_configuration[256];
+static uint8_t working_configuration[2][256];
+static uint8_t inactive_working_configuration = 0;
 static uint8_t result_buffer[256] = { U16_TO_U8S_LE(NOK), U16_TO_U8S_LE(4) };
 
-static bool config_dirty = false;
+static bool reload_config = false;
 static uint16_t write_offset = 0;
 static uint16_t read_offset = 0;
 
 bool validate_filter_configuration(filter_configuration_tlv *filters)
 {
-    if (filters->header.type != FILTER_CONFIGURATION)
-    {
+    if (filters->header.type != FILTER_CONFIGURATION) {
         printf("Error! Not a filter TLV (%x)..\n", filters->header.type);
         return false;
     }
     uint8_t *ptr = (uint8_t *)filters->header.value;
     const uint8_t *end = (uint8_t *)filters + filters->header.length;
-    while ((ptr + 4) < end)
-    {
-        uint32_t type = *(uint32_t *)ptr;
-        uint16_t remaining = (uint16_t)(end - ptr);
-        printf("Found Filter Type %d (%p rem: %d)..\n", type, ptr, remaining);
-        switch (type)
-        {
+    int count = 0;
+    while ((ptr + 4) < end) {
+        const uint32_t type = *(uint32_t *)ptr;
+        const uint16_t remaining = (uint16_t)(end - ptr);
+        if (count++ > MAX_FILTER_STAGES) {
+            printf("Error! Too many filters defined.\n");
+            return false;
+        }
+        switch (type) {
         case LOWPASS:
         case HIGHPASS:
         case BANDPASSSKIRT:
         case BANDPASSPEAK:
         case NOTCH:
-        case ALLPASS:
-        {
-            if (remaining < sizeof(filter2))
-            {
+        case ALLPASS: {
+            if (remaining < sizeof(filter2)) {
                 printf("Error! Not enough data left for filter2 (%d)..\n", remaining);
                 return false;
             }
-            filter2 *args = (filter2 *)ptr;
-            printf("Args: F0: %0.2f, Q: %0.2f\n", args->f0, args->Q);
-            ptr += sizeof(filter2);
             break;
         }
         case PEAKING:
         case LOWSHELF:
-        case HIGHSHELF:
-        {
-            if (remaining < sizeof(filter3))
-            {
+        case HIGHSHELF: {
+            if (remaining < sizeof(filter3)) {
                 printf("Error! Not enough data left for filter3 (%d)..\n", remaining);
                 return false;
             }
-            filter3 *args = (filter3 *)ptr;
-            printf("Args: F0: %0.2f, dbGain: %0.2f, Q: %0.2f\n", args->f0, args->dBgain, args->Q);
             ptr += sizeof(filter3);
             break;
         }
@@ -118,17 +117,44 @@ bool validate_filter_configuration(filter_configuration_tlv *filters)
             return false;
         }
     }
-    if (ptr != end)
-    {
+    if (ptr != end) {
         printf("Error! Did not consume the whole TLV (%p != %p)..\n", ptr, end);
         return false;
     }
-    printf("Config looks good..\n");
     return true;
 }
 
-bool validate_configuration(tlv_header *config)
-{
+void apply_filter_configuration(filter_configuration_tlv *filters) {
+    uint8_t *ptr = (uint8_t *)filters->header.value;
+    const uint8_t *end = (uint8_t *)filters + filters->header.length;
+    filter_stages = 0;
+
+    while ((ptr + 4) < end) {
+        const uint32_t type = *(uint32_t *)ptr;
+
+        // If you reset the memory, you can hear it when you move the sliders on the UI,
+        // is it perhaps OK to leave these and let the old values drop off over time?
+        //bqf_memreset(&bqf_filters_mem_left[filter_stages]);
+        //bqf_memreset(&bqf_filters_mem_right[filter_stages]);
+
+        switch (type) {
+            case LOWPASS: INIT_FILTER2(lowpass);
+            case HIGHPASS: INIT_FILTER2(highpass);
+            case BANDPASSSKIRT: INIT_FILTER2(bandpass_skirt);
+            case BANDPASSPEAK: INIT_FILTER2(bandpass_peak);
+            case NOTCH: INIT_FILTER2(notch);
+            case ALLPASS: INIT_FILTER2(allpass);
+            case PEAKING: INIT_FILTER3(peaking);
+            case LOWSHELF: INIT_FILTER3(lowshelf);
+            case HIGHSHELF: INIT_FILTER3(highshelf);
+            default:
+                break;
+        }
+        filter_stages++;
+    }
+}
+
+bool validate_configuration(tlv_header *config) {
     if (config->type != SET_CONFIGURATION) {
         printf("Unexpcected Config type: %d\n", config->type);
         return false;
@@ -137,27 +163,102 @@ bool validate_configuration(tlv_header *config)
     const uint8_t *end = (uint8_t *)config + config->length;
     while (ptr < end) {
         tlv_header* tlv = (tlv_header*) ptr;
-        printf("Found TLV type: %d\n", tlv->type);
-        if (tlv->type == FILTER_CONFIGURATION)
-        {
-            if (!validate_filter_configuration((filter_configuration_tlv*) tlv)) {
-                return false;
-            }
+        if (tlv->length < 4) {
+            return false;
         }
-
+        switch (tlv->type) {
+            case FILTER_CONFIGURATION:
+                if (!validate_filter_configuration((filter_configuration_tlv*) tlv)) {
+                    return false;
+                }
+                break;
+            default:
+                // Unknown TLVs are not invalid, just ignored.
+                break;
+        }
         ptr += tlv->length;
     }
+    return true;
 }
 
-void load_config()
-{
+bool apply_configuration(tlv_header *config) {
+    uint8_t *ptr = NULL; 
+    switch (config->type)
+    {
+        case SET_CONFIGURATION:
+            ptr = (uint8_t *) config->value;
+            break;
+        case FLASH_HEADER: {
+            ptr = (uint8_t *) ((flash_header_tlv*) config)->tlvs;
+            break;
+        }
+        default:
+            printf("Unexpcected Config type: %d\n", config->type);
+            return false;
+    }
+
+    const uint8_t *end = (uint8_t *)config + config->length;
+    while (ptr < end) {
+        tlv_header* tlv = (tlv_header*) ptr;
+        switch (tlv->type) {
+            case FILTER_CONFIGURATION:
+                apply_filter_configuration((filter_configuration_tlv*) tlv);
+                break;
+            default:
+                break;
+        }
+        ptr += tlv->length;
+    }
+    return true;
+}
+
+void load_config() {
+#ifndef TEST_TARGET
     // Try to load data from flash
+    if (validate_configuration((tlv_header*) user_configuration)) {
+        apply_configuration((tlv_header*) user_configuration);
+        return;
+    }
+#endif
     // If that is no good, use the default config
+    apply_configuration((tlv_header*) &default_config);
 }
 
-void save_config()
-{
-    // Write data to flash
+#ifndef TEST_TARGET
+bool save_config() {
+    const uint8_t active_configuration = inactive_working_configuration ? 0 : 1;
+    tlv_header* config = (tlv_header*) working_configuration[active_configuration];
+
+    if (validate_configuration(config)) {
+        const size_t config_length = config->length - (size_t)((size_t)config->value - (size_t)config);
+        // Write data to flash
+        flash_header_tlv flash_header;
+        flash_header.header.type = FLASH_HEADER;
+        flash_header.header.length = sizeof(flash_header) + config_length;
+        flash_header.magic = FLASH_MAGIC;
+        flash_header.version = CONFIG_VERSION;
+        flash_range_program(USER_CONFIGURATION_OFFSET, (const uint8_t *) &flash_header, sizeof(flash_header));
+        flash_range_program(USER_CONFIGURATION_OFFSET + sizeof(flash_header), config->value, config_length);
+        return true;
+    }
+    return false;
+}
+
+bool process_cmd(tlv_header* cmd) {
+    switch (cmd->type) {
+        case SET_CONFIGURATION:
+            if (validate_configuration(cmd)) {
+                inactive_working_configuration = inactive_working_configuration ? 0 : 1;
+                reload_config = true;
+                return true;
+            }
+        case SAVE_CONFIGURATION: {
+            if (cmd->length == 4) {
+                return save_config();
+            }
+        }
+    }
+    return false;
 }
 
 // This callback is called when the client sends a message to the device.
@@ -169,19 +270,19 @@ void save_config()
 // buffer with a TLV which we expect the client to read next.
 void config_out_packet(struct usb_endpoint *ep) {
     struct usb_buffer *buffer = usb_current_out_packet_buffer(ep);
-    printf("config_out_packet %d\n", buffer->data_len);
+    //printf("config_out_packet %d\n", buffer->data_len);
 
-    memcpy(&working_configuration[write_offset], buffer->data, buffer->data_len);
+    memcpy(&working_configuration[inactive_working_configuration][write_offset], buffer->data, buffer->data_len);
     write_offset += buffer->data_len;
 
-    const uint16_t transfer_length = ((tlv_header*) working_configuration)->length;
-    printf("config_length %d %d\n", transfer_length, write_offset);
-    if (transfer_length >= write_offset) {
+    const uint16_t transfer_length = ((tlv_header*) working_configuration[inactive_working_configuration])->length;
+    //printf("config_length %d %d\n", transfer_length, write_offset);
+    if (write_offset >= transfer_length) {
         // Command complete, fill the result buffer
         tlv_header* result = ((tlv_header*) result_buffer);
         write_offset = 0;
 
-        if (validate_configuration((tlv_header*) working_configuration)) {
+        if (process_cmd((tlv_header*) working_configuration[inactive_working_configuration])) {
             result->type = OK;
             result->length = 4;
         }
@@ -202,15 +303,16 @@ void config_out_packet(struct usb_endpoint *ep) {
 void config_in_packet(struct usb_endpoint *ep) {
     assert(ep->current_transfer);
     struct usb_buffer *buffer = usb_current_in_packet_buffer(ep);
-    printf("config_in_packet %d\n", buffer->data_len);
+    //printf("config_in_packet %d\n", buffer->data_len);
     assert(buffer->data_max >= 3);
 
     const uint16_t transfer_length = ((tlv_header*) result_buffer)->length;
     const uint16_t packet_length = MIN(buffer->data_max, transfer_length - read_offset);
     memcpy(buffer->data, &result_buffer[read_offset], packet_length);
     buffer->data_len = packet_length;
+    read_offset += packet_length;
 
-    if (transfer_length >= read_offset) {
+    if (read_offset >= transfer_length) {
         // Done
         read_offset = 0;
 
@@ -223,3 +325,15 @@ void config_in_packet(struct usb_endpoint *ep) {
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
 }
+
+void apply_core0_config() {
+}
+
+void apply_core1_config() {
+    if (reload_config) {
+        reload_config = false;
+        const uint8_t active_configuration = inactive_working_configuration ? 0 : 1;
+        apply_configuration((tlv_header*) working_configuration[active_configuration]);
+    }
+}
+#endif

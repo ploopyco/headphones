@@ -43,17 +43,11 @@
 #include "ringbuf.h"
 #include "i2s.h"
 #include "bqf.h"
-#include "user.h"
 #include "os_descriptors.h"
 #include "configuration_manager.h"
 
 i2s_obj_t i2s_write_obj;
 static uint8_t *userbuf;
-
-bqf_coeff_t bqf_filters_left[MAX_FILTER_STAGES];
-bqf_coeff_t bqf_filters_right[MAX_FILTER_STAGES];
-bqf_mem_t bqf_filters_mem_left[MAX_FILTER_STAGES];
-bqf_mem_t bqf_filters_mem_right[MAX_FILTER_STAGES];
 
 static struct {
     uint32_t freq;
@@ -80,7 +74,9 @@ enum vendor_cmds {
 int main(void) {
     setup();
 
-    define_filters();
+    // Ask the configuration_manager to load a user config from flash,
+    // or use the defaults.
+    load_config();
 
     // start second core (called "core 1" in the SDK)
     multicore_launch_core1(core1_entry);
@@ -127,12 +123,16 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
 
     // Block until core 1 has finished transforming the data
     uint32_t ready = multicore_fifo_pop_blocking();
+    multicore_fifo_push_blocking(CORE0_READY);
 
     i2s_stream_write(&i2s_write_obj, userbuf, samples * 4);
 
     // keep on truckin'
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
+
+    // Update filters if required
+    apply_core0_config();
 }
 
 static void update_volume()
@@ -179,6 +179,12 @@ void core1_entry() {
 
         // Signal to core 0 that the data has all been transformed
         multicore_fifo_push_blocking(CORE1_READY);
+
+        // Wait for Core 0 to finish running its filtering before we apply config updates
+        multicore_fifo_pop_blocking();
+
+        // Update filters if required
+        apply_core1_config();
 
         // Update the volume if required. We do this from core1 as
         // core0 is more heavily loaded, doing this from core0 can

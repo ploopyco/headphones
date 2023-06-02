@@ -16,7 +16,6 @@ add_executable(ploopy_headphones
     i2s.c
     fix16.c
     bqf.c
-    user.c
     configuration_manager.c
 )
 

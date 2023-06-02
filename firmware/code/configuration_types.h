@@ -16,6 +16,9 @@
 #define __CONFIGURATION_TYPES_H__
 #include <stdint.h>
 
+#define FLASH_MAGIC 0x2E8AFEDD
+#define CONFIG_VERSION 1
+
 enum structure_types {
     // Commands/Responses, these are container TLVs. The Value will be a set of TLV structures.
     OK = 0,                     // Standard response when a command was successful
@@ -70,6 +73,13 @@ enum filter_type {
     HIGHSHELF
 };
 
+typedef struct __attribute__((__packed__)) _flash_header_tlv {
+    tlv_header header;
+    uint32_t magic;
+    uint32_t version;
+    const uint8_t tlvs[];
+} flash_header_tlv;
+
 typedef struct __attribute__((__packed__)) _filter_configuration_tlv {
     tlv_header header;
     const uint8_t filters[];
@@ -82,6 +92,7 @@ typedef struct __attribute__((__packed__)) _version_status_tlv {
 } version_status_tlv;
 
 typedef struct __attribute__((__packed__)) _default_configuration {
+    tlv_header set_configuration;
     const struct __attribute__((__packed__)) {
         tlv_header filter;
         filter3 f1;

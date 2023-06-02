@@ -2,12 +2,7 @@
 #include <stdlib.h>
 #include "bqf.h"
 #include "fix16.h"
-#include "user.h"
-
-bqf_coeff_t bqf_filters_left[MAX_FILTER_STAGES];
-bqf_coeff_t bqf_filters_right[MAX_FILTER_STAGES];
-bqf_mem_t bqf_filters_mem_left[MAX_FILTER_STAGES];
-bqf_mem_t bqf_filters_mem_right[MAX_FILTER_STAGES];
+#include "configuration_manager.h"
 
 const char* usage = "Usage: %s INFILE OUTFILE\n\n"
     "Reads 16bit stereo PCM data from INFILE, runs it through the Ploopy headphones\n"
@@ -52,7 +47,7 @@ int main(int argc, char* argv[])
 
     // The smaple proccesing code, essentially the same as the
     // code in the firmware's run.c file.
-    define_filters();
+    load_config();
 
     for (int i = 0; i < samples; i++)
     {

@@ -25,6 +25,12 @@
 
 #include "bqf.h"
 
+int filter_stages = 0;
+bqf_coeff_t bqf_filters_left[MAX_FILTER_STAGES];
+bqf_coeff_t bqf_filters_right[MAX_FILTER_STAGES];
+bqf_mem_t bqf_filters_mem_left[MAX_FILTER_STAGES];
+bqf_mem_t bqf_filters_mem_right[MAX_FILTER_STAGES];
+
 /**
  * Configure a low-pass filter. Parameters are as follows:
  *
