@@ -49,15 +49,17 @@ typedef struct __attribute__((__packed__)) _tlv_header {
 } tlv_header;
 
 typedef struct __attribute__((__packed__)) _filter2 {
-    uint32_t type;
+    uint8_t type;
+    uint8_t reserved[3];
     double f0;
     double Q;
 } filter2;
 
 typedef struct __attribute__((__packed__)) _filter3 {
-    uint32_t type;
+    uint8_t type;
+    uint8_t reserved[3];
     double f0;
-    double dBgain;
+    double db_gain;
     double Q;
 } filter3;
 
@@ -80,6 +82,13 @@ typedef struct __attribute__((__packed__)) _flash_header_tlv {
     const uint8_t tlvs[];
 } flash_header_tlv;
 
+typedef struct __attribute__((__packed__)) _preprocessing_configuration_tlv {
+    tlv_header header;
+    double preamp;
+    uint8_t reverse_stereo;
+    uint8_t reserved[3];
+} preprocessing_configuration_tlv;
+
 typedef struct __attribute__((__packed__)) _filter_configuration_tlv {
     tlv_header header;
     const uint8_t filters[];
@@ -101,6 +110,7 @@ typedef struct __attribute__((__packed__)) _default_configuration {
         filter3 f4;
         filter3 f5;
     } filters;
+    preprocessing_configuration_tlv preprocessing;
 } default_configuration;
 
 #endif // __CONFIGURATION_TYPES_H__

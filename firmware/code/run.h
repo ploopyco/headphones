@@ -28,6 +28,7 @@
 
 #include "ringbuf.h"
 #include "i2s.h"
+#include "fix16.h"
 
 /*****************************************************************************
  * USB-related definitions begin here.
@@ -73,6 +74,13 @@ typedef struct _audio_device_config {
     struct usb_endpoint_descriptor ep3;
     struct usb_endpoint_descriptor ep4;
 } audio_device_config;
+
+typedef struct _preprocessing_config {
+    fix16_t preamp;
+    int reverse_stereo;
+} preprocessing_config;
+
+extern preprocessing_config preprocessing;
 
 static char *descriptor_strings[] = {
     "Ploopy Corporation",

@@ -47,12 +47,13 @@ static const default_configuration default_config = {
     .set_configuration = { SET_CONFIGURATION, sizeof(default_config) },
     .filters = {
         .filter = { FILTER_CONFIGURATION, sizeof(default_config.filters) },
-        .f1 = { PEAKING,    38,   -19,  0.9 },
-        .f2 = { LOWSHELF,   2900,   2,  0.7 },
-        .f3 = { PEAKING,    430,    3,  3.5 },
-        .f4 = { HIGHSHELF,  8400,   2,  0.7 },
-        .f5 = { PEAKING,    4800,   3,    5 }
-    }
+        .f1 = { PEAKING,    {0},    38,   -19,  0.9 },
+        .f2 = { LOWSHELF,   {0},    2900,   2,  0.7 },
+        .f3 = { PEAKING,    {0},    430,    3,  3.5 },
+        .f4 = { HIGHSHELF,  {0},    8400,   2,  0.7 },
+        .f5 = { PEAKING,    {0},    4800,   3,    5 }
+    },
+    .preprocessing = { .header = { PREPROCESSING_CONFIGURATION, sizeof(default_config.preprocessing) }, -0.1f, false, {0} }
 };
 
 // Grab the last 4k page of flash for our configuration strutures.
@@ -96,6 +97,8 @@ bool validate_filter_configuration(filter_configuration_tlv *filters)
         case BANDPASSPEAK:
         case NOTCH:
         case ALLPASS: {
+            //filter2 *args = (filter2 *)ptr;
+            //printf("Found Filter %d: %0.2f %0.2f\n", args->type, args->f0, args->Q);
             if (remaining < sizeof(filter2)) {
                 printf("Error! Not enough data left for filter2 (%d)..\n", remaining);
                 return false;
@@ -105,6 +108,8 @@ bool validate_filter_configuration(filter_configuration_tlv *filters)
         case PEAKING:
         case LOWSHELF:
         case HIGHSHELF: {
+            //filter3 *args = (filter3 *)ptr;
+            //printf("Found Filter %d: %0.2f %0.2f %0.2f\n", args->type, args->f0, args->db_gain, args->Q);
             if (remaining < sizeof(filter3)) {
                 printf("Error! Not enough data left for filter3 (%d)..\n", remaining);
                 return false;
@@ -155,15 +160,25 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
 }
 
 bool validate_configuration(tlv_header *config) {
-    if (config->type != SET_CONFIGURATION) {
-        printf("Unexpcected Config type: %d\n", config->type);
-        return false;
+    uint8_t *ptr = NULL; 
+    switch (config->type)
+    {
+        case SET_CONFIGURATION:
+            ptr = (uint8_t *) config->value;
+            break;
+        case FLASH_HEADER: {
+            ptr = (uint8_t *) ((flash_header_tlv*) config)->tlvs;
+            break;
+        }
+        default:
+            printf("Unexpected Config type: %d\n", config->type);
+            return false;
     }
-    uint8_t *ptr = (uint8_t *)config->value;
     const uint8_t *end = (uint8_t *)config + config->length;
     while (ptr < end) {
         tlv_header* tlv = (tlv_header*) ptr;
         if (tlv->length < 4) {
+            printf("Bad length... %d\n", tlv->length);
             return false;
         }
         switch (tlv->type) {
@@ -172,6 +187,14 @@ bool validate_configuration(tlv_header *config) {
                     return false;
                 }
                 break;
+            case PREPROCESSING_CONFIGURATION: {
+                preprocessing_configuration_tlv* preprocessing_config = (preprocessing_configuration_tlv*) tlv;
+                //printf("Preproc %0.2f %d\n", preprocessing_config->preamp, preprocessing_config->reverse_stereo);
+                if (tlv->length != sizeof(preprocessing_configuration_tlv)) {
+                    printf("Preprocessing size missmatch: %u != %zu\n", tlv->length, sizeof(preprocessing_configuration_tlv));
+                    return false;
+                }
+                break;}
             default:
                 // Unknown TLVs are not invalid, just ignored.
                 break;
@@ -193,17 +216,23 @@ bool apply_configuration(tlv_header *config) {
             break;
         }
         default:
-            printf("Unexpcected Config type: %d\n", config->type);
+            printf("Unexpected Config type: %d\n", config->type);
             return false;
     }
 
     const uint8_t *end = (uint8_t *)config + config->length;
-    while (ptr < end) {
+    while ((ptr + 4) < end) {
         tlv_header* tlv = (tlv_header*) ptr;
         switch (tlv->type) {
             case FILTER_CONFIGURATION:
                 apply_filter_configuration((filter_configuration_tlv*) tlv);
                 break;
+            case PREPROCESSING_CONFIGURATION: {
+                preprocessing_configuration_tlv* preprocessing_config = (preprocessing_configuration_tlv*) tlv;
+                preprocessing.preamp = fix16_from_dbl(1.0 + preprocessing_config->preamp);
+                preprocessing.reverse_stereo = preprocessing_config->reverse_stereo;
+                break;
+            }
             default:
                 break;
         }
@@ -248,7 +277,8 @@ bool process_cmd(tlv_header* cmd) {
     switch (cmd->type) {
         case SET_CONFIGURATION:
             if (validate_configuration(cmd)) {
-                inactive_working_configuration = inactive_working_configuration ? 0 : 1;
+                inactive_working_configuration = (inactive_working_configuration ? 0 : 1);
+                ((tlv_header*) working_configuration[inactive_working_configuration])->length = 0;
                 reload_config = true;
                 return true;
             }
@@ -277,7 +307,7 @@ void config_out_packet(struct usb_endpoint *ep) {
 
     const uint16_t transfer_length = ((tlv_header*) working_configuration[inactive_working_configuration])->length;
     //printf("config_length %d %d\n", transfer_length, write_offset);
-    if (write_offset >= transfer_length) {
+    if (transfer_length && write_offset >= transfer_length) {
         // Command complete, fill the result buffer
         tlv_header* result = ((tlv_header*) result_buffer);
         write_offset = 0;

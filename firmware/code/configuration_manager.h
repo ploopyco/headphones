@@ -32,8 +32,8 @@ struct usb_endpoint;
 
 #define INIT_FILTER3(T) { \
     filter3 *args = (filter3 *)ptr; \
-    bqf_##T##_config(SAMPLING_FREQ, args->f0, args->dBgain, args->Q, &bqf_filters_left[filter_stages]); \
-    bqf_##T##_config(SAMPLING_FREQ, args->f0, args->dBgain, args->Q, &bqf_filters_right[filter_stages]); \
+    bqf_##T##_config(SAMPLING_FREQ, args->f0, args->db_gain, args->Q, &bqf_filters_left[filter_stages]); \
+    bqf_##T##_config(SAMPLING_FREQ, args->f0, args->db_gain, args->Q, &bqf_filters_right[filter_stages]); \
     ptr += sizeof(filter3); \
     break; \
     }

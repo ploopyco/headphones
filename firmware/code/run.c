@@ -64,6 +64,11 @@ static struct {
     .freq = 48000,
 };
 
+preprocessing_config preprocessing = {
+    .preamp = fix16_one,
+    .reverse_stereo = false
+};
+
 static char spi_serial_number[17] = "";
 
 enum vendor_cmds {
@@ -103,8 +108,16 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     int32_t *out = (int32_t *) userbuf;
     int samples = usb_buffer->data_len / 2;
 
-    for (int i = 0; i < samples; i++)
-        out[i] = in[i];
+    if (preprocessing.reverse_stereo) {
+        for (int i = 0; i < samples; i+=2) {
+            out[i] = in[i+1];
+            out[i+1] = in[i];
+        }
+    }
+    else {
+        for (int i = 0; i < samples; i++)
+            out[i] = in[i];
+    }
 
     multicore_fifo_push_blocking(CORE0_READY);
     multicore_fifo_push_blocking(samples);
@@ -112,7 +125,7 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     for (int j = 0; j < filter_stages; j++) {
         // Left channel filter
         for (int i = 0; i < samples; i += 2) {
-            fix16_t x_f16 = fix16_from_int((int16_t) out[i]);
+            fix16_t x_f16 = fix16_mul(fix16_from_int((int16_t) out[i]), preprocessing.preamp);
 
             x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
                 &bqf_filters_mem_left[j]);
@@ -168,7 +181,7 @@ void core1_entry() {
 
         for (int j = 0; j < filter_stages; j++) {
             for (int i = 1; i < limit; i += 2) {
-                fix16_t x_f16 = fix16_from_int((int16_t) out[i]);
+                fix16_t x_f16 = fix16_mul(fix16_from_int((int16_t) out[i]), preprocessing.preamp);
 
                 x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
                     &bqf_filters_mem_right[j]);
@@ -197,6 +210,11 @@ void setup() {
     set_sys_clock_khz(SYSTEM_FREQ / 1000, true);
     sleep_ms(100);
     stdio_init_all();
+
+    for (int i=0; i<MAX_FILTER_STAGES; i++) {
+        bqf_memreset(&bqf_filters_mem_left[i]);
+        bqf_memreset(&bqf_filters_mem_right[i]);
+    }
 
     pico_get_unique_board_id_string(spi_serial_number, 17);
     descriptor_strings[2] = spi_serial_number;
