@@ -46,6 +46,20 @@
 #define MAX_VOLUME ENCODE_DB(0)
 #define VOLUME_RESOLUTION ENCODE_DB(0.5f)
 
+typedef struct _audio_state_config {
+    uint32_t freq;
+    union {
+        int16_t volume[2];
+        int32_t _volume;
+    };
+    union {
+        int16_t target_volume[2];
+        int32_t _target_volume;
+    };
+    bool mute;
+} audio_state_config;
+extern audio_state_config audio_state;
+
 typedef struct _audio_device_config {
     struct usb_configuration_descriptor descriptor;
     struct usb_interface_descriptor ac_interface;
@@ -144,5 +158,6 @@ static bool do_set_current(struct usb_setup_packet *);
 static bool ac_setup_request_handler(__unused struct usb_interface *, struct usb_setup_packet *);
 bool _as_setup_request_handler(__unused struct usb_endpoint *, struct usb_setup_packet *);
 void usb_sound_card_init(void);
-
+extern void power_down_dac();
+extern void power_up_dac();
 #endif

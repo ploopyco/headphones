@@ -18,6 +18,7 @@
 
 #define FLASH_MAGIC 0x2E8AFEDD
 #define CONFIG_VERSION 1
+#define MINIMUM_CONFIG_VERSION 1
 
 enum structure_types {
     // Commands/Responses, these are container TLVs. The Value will be a set of TLV structures.
@@ -31,6 +32,7 @@ enum structure_types {
     GET_ACTIVE_CONFIGURATION,   // Retrieves the current active configuration TLVs from RAM
     GET_STORED_CONFIGURATION,   // Retrieves the current stored configuration TLVs from Flash
     SAVE_CONFIGURATION,         // Writes the active configuration to Flash
+    FACTORY_RESET,              // Invalidates the flash memory
 
     // Configuration structures, these are returned in the body of a command/response
     PREPROCESSING_CONFIGURATION = 0x200,
@@ -98,6 +100,7 @@ typedef struct __attribute__((__packed__)) _version_status_tlv {
     tlv_header header;
     uint16_t current_version;
     uint16_t minimum_supported_version;
+    uint32_t reserved;
 } version_status_tlv;
 
 typedef struct __attribute__((__packed__)) _default_configuration {

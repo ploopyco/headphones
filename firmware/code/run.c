@@ -49,18 +49,7 @@
 i2s_obj_t i2s_write_obj;
 static uint8_t *userbuf;
 
-static struct {
-    uint32_t freq;
-    union {
-        int16_t volume[2];
-        int32_t _volume;
-    };
-    union {
-        int16_t target_volume[2];
-        int32_t _target_volume;
-    };
-    bool mute;
-} audio_state = {
+audio_state_config audio_state = {
     .freq = 48000,
 };
 
@@ -108,6 +97,9 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     int32_t *out = (int32_t *) userbuf;
     int samples = usb_buffer->data_len / 2;
 
+    // Update filters if required
+    apply_core0_config();
+
     if (preprocessing.reverse_stereo) {
         for (int i = 0; i < samples; i+=2) {
             out[i] = in[i+1];
@@ -143,9 +135,6 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     // keep on truckin'
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
-
-    // Update filters if required
-    apply_core0_config();
 }
 
 static void update_volume()
@@ -245,7 +234,7 @@ void setup() {
     // The PCM3060 supports standard mode (100kbps) or fast mode (400kbps)
     // we run in fast mode so we dont block the core for too long while
     // updating the volume.
-    i2c_init(i2c0, 400000);
+    i2c_init(i2c0, 50000);
     gpio_set_function(PCM3060_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(PCM3060_SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(PCM3060_SDA_PIN);
@@ -786,13 +775,11 @@ static struct usb_stream_transfer_funcs control_stream_funcs = {
 
 static bool ad_setup_request_handler(__unused struct usb_device *device, struct usb_setup_packet *setup) {
     setup = __builtin_assume_aligned(setup, 4);
-    printf("ad_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
+    //("ad_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
 
     if (setup->bmRequestType & USB_DIR_IN) {
         if (USB_REQ_TYPE_RECIPIENT_DEVICE == (setup->bmRequestType & USB_REQ_TYPE_TYPE_MASK)) {
-            printf("Device request %x\n", (setup->wValue >> 8));
             if ((setup->bRequest == USB_REQUEST_GET_DESCRIPTOR) && ((setup->wValue >> 8) == 0xF /* BOS */)) {
-                printf("Request BOS descriptor, idx %d\n", setup->wValue & 0xFF);
 
                 struct usb_endpoint *usb_control_in = usb_get_control_in_endpoint();
                 static struct usb_stream_transfer_funcs control_stream_funcs = {
@@ -815,6 +802,7 @@ static bool ad_setup_request_handler(__unused struct usb_device *device, struct 
         // To prevent badly behaving software from accidentally triggering a reboot, e expect
         // the wValue to be equal to the Ploopy vendor id.
         if (setup->bRequest == REBOOT_BOOTLOADER && setup->wValue == 0x2E8A) {
+            power_down_dac();
             reset_usb_boot(0, 0);
             // reset_usb_boot does not return, so we will not respond to this command.
             return true;
@@ -822,9 +810,7 @@ static bool ad_setup_request_handler(__unused struct usb_device *device, struct 
         else if (USB_REQ_TYPE_RECIPIENT_DEVICE == (setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) && setup->bRequest == MICROSOFT_COMPATIBLE_ID_FEATURE_DESRIPTOR && setup->wIndex == 0x7)
         {
             const int length = MIN(MS_OS_20_DESC_LEN, setup->wLength);
-
-            printf("Sending %u bytes (%u %u)\n", length, MS_OS_20_DESC_LEN, sizeof(desc_ms_os_20));
-
+            //printf("Sending %u bytes (%u %u)\n", length, MS_OS_20_DESC_LEN, sizeof(desc_ms_os_20));
             struct usb_endpoint *usb_control_in = usb_get_control_in_endpoint();
             usb_stream_setup_transfer(&_control_in_stream_transfer, &control_stream_funcs, desc_ms_os_20,
                             sizeof(desc_ms_os_20), length, _tf_send_control_in_ack);
@@ -841,13 +827,13 @@ static bool ad_setup_request_handler(__unused struct usb_device *device, struct 
 static struct usb_stream_transfer _config_in_stream_transfer;
 static bool configuration_interface_setup_request_handler(__unused struct usb_interface *interface, struct usb_setup_packet *setup) {
     setup = __builtin_assume_aligned(setup, 4);
-    printf("configuration_interface_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
+    //printf("configuration_interface_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
     return false;
 }
 
 static bool ac_setup_request_handler(__unused struct usb_interface *interface, struct usb_setup_packet *setup) {
     setup = __builtin_assume_aligned(setup, 4);
-    printf("ac_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
+    //printf("ac_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
 
     if (USB_REQ_TYPE_TYPE_CLASS == (setup->bmRequestType & USB_REQ_TYPE_TYPE_MASK)) {
         switch (setup->bRequest) {
@@ -875,7 +861,7 @@ static bool ac_setup_request_handler(__unused struct usb_interface *interface, s
 
 bool _as_setup_request_handler(__unused struct usb_endpoint *ep, struct usb_setup_packet *setup) {
     setup = __builtin_assume_aligned(setup, 4);
-    printf("as_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
+    //printf("as_setup_request_handler: Type %u, Request %u, Value %u, Index %u, Length %u\n", setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
 
     if (USB_REQ_TYPE_TYPE_CLASS == (setup->bmRequestType & USB_REQ_TYPE_TYPE_MASK)) {
         switch (setup->bRequest) {
@@ -948,6 +934,22 @@ void usb_sound_card_init() {
     _audio_reconfigure();
 
     usb_device_start();
+}
+
+// Some operations will cause popping on the audio output, temporarily
+// disabling the DAC sounds much better.
+void power_down_dac() {
+    uint8_t buf[2];
+    buf[0] = 64; // register addr
+    buf[1] = 0xF0; // DAC low power mode
+    i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 2, false);
+}
+
+void power_up_dac() {
+    uint8_t buf[2];
+    buf[0] = 64; // register addr
+    buf[1] = 0xE0; // DAC normal mode
+    i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 2, false);
 }
 
 /*****************************************************************************

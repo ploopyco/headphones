@@ -23,9 +23,12 @@
 #include "bqf.h"
 #include "run.h"
 #ifndef TEST_TARGET
+#include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "pico/usb_device.h"
 #include "hardware/flash.h"
+#include "hardware/sync.h"
+#include "hardware/i2c.h"
 #endif
 
 /**
@@ -59,7 +62,7 @@ static const default_configuration default_config = {
 // Grab the last 4k page of flash for our configuration strutures.
 #ifndef TEST_TARGET
 static const size_t USER_CONFIGURATION_OFFSET = PICO_FLASH_SIZE_BYTES - 0x1000;
-static const uint8_t *user_configuration = (const uint8_t *) (XIP_BASE + USER_CONFIGURATION_OFFSET);
+const uint8_t *user_configuration = (const uint8_t *) (XIP_BASE + USER_CONFIGURATION_OFFSET);
 #endif
 /**
  * TODO: For now, assume we always get a complete configuration but maybe we
@@ -71,6 +74,8 @@ static uint8_t inactive_working_configuration = 0;
 static uint8_t result_buffer[256] = { U16_TO_U8S_LE(NOK), U16_TO_U8S_LE(4) };
 
 static bool reload_config = false;
+static bool save_config = false;
+static bool factory_reset = false;
 static uint16_t write_offset = 0;
 static uint16_t read_offset = 0;
 
@@ -87,7 +92,7 @@ bool validate_filter_configuration(filter_configuration_tlv *filters)
         const uint32_t type = *(uint32_t *)ptr;
         const uint16_t remaining = (uint16_t)(end - ptr);
         if (count++ > MAX_FILTER_STAGES) {
-            printf("Error! Too many filters defined.\n");
+            printf("Error! Too many filters defined. (%d)\n", count);
             return false;
         }
         switch (type) {
@@ -103,6 +108,7 @@ bool validate_filter_configuration(filter_configuration_tlv *filters)
                 printf("Error! Not enough data left for filter2 (%d)..\n", remaining);
                 return false;
             }
+            ptr += sizeof(filter2);
             break;
         }
         case PEAKING:
@@ -167,7 +173,20 @@ bool validate_configuration(tlv_header *config) {
             ptr = (uint8_t *) config->value;
             break;
         case FLASH_HEADER: {
-            ptr = (uint8_t *) ((flash_header_tlv*) config)->tlvs;
+            flash_header_tlv* header = (flash_header_tlv*) config;
+            if (header->magic != FLASH_MAGIC) {
+                printf("Unexpected magic word (%x)\n", header->magic);
+                return false;
+            }
+            if (header->version > CONFIG_VERSION) {
+                printf("Config is too new (%d > %d)\n", header->version, CONFIG_VERSION);
+                return false;
+            }
+            if (header->version < MINIMUM_CONFIG_VERSION) {
+                printf("Config is too old (%d > %d)\n", header->version, MINIMUM_CONFIG_VERSION);
+                return false;
+            }
+            ptr = (uint8_t *) header->tlvs;
             break;
         }
         default:
@@ -194,7 +213,8 @@ bool validate_configuration(tlv_header *config) {
                     printf("Preprocessing size missmatch: %u != %zu\n", tlv->length, sizeof(preprocessing_configuration_tlv));
                     return false;
                 }
-                break;}
+                break;
+            }
             default:
                 // Unknown TLVs are not invalid, just ignored.
                 break;
@@ -243,6 +263,7 @@ bool apply_configuration(tlv_header *config) {
 
 void load_config() {
 #ifndef TEST_TARGET
+    flash_header_tlv* hdr = (flash_header_tlv*) user_configuration;
     // Try to load data from flash
     if (validate_configuration((tlv_header*) user_configuration)) {
         apply_configuration((tlv_header*) user_configuration);
@@ -254,40 +275,84 @@ void load_config() {
 }
 
 #ifndef TEST_TARGET
-bool save_config() {
+// Must be in RAM
+uint8_t flash_buffer[FLASH_PAGE_SIZE];
+bool __no_inline_not_in_flash_func(save_configuration)() {
     const uint8_t active_configuration = inactive_working_configuration ? 0 : 1;
     tlv_header* config = (tlv_header*) working_configuration[active_configuration];
 
     if (validate_configuration(config)) {
         const size_t config_length = config->length - (size_t)((size_t)config->value - (size_t)config);
         // Write data to flash
-        flash_header_tlv flash_header;
-        flash_header.header.type = FLASH_HEADER;
-        flash_header.header.length = sizeof(flash_header) + config_length;
-        flash_header.magic = FLASH_MAGIC;
-        flash_header.version = CONFIG_VERSION;
-        flash_range_program(USER_CONFIGURATION_OFFSET, (const uint8_t *) &flash_header, sizeof(flash_header));
-        flash_range_program(USER_CONFIGURATION_OFFSET + sizeof(flash_header), config->value, config_length);
+        flash_header_tlv* flash_header = (flash_header_tlv*) flash_buffer;
+        flash_header->header.type = FLASH_HEADER;
+        flash_header->header.length = sizeof(flash_header) + config_length;
+        flash_header->magic = FLASH_MAGIC;
+        flash_header->version = CONFIG_VERSION;
+        memcpy((void*)(flash_header->tlvs), config->value, config_length);
+
+        power_down_dac();
+
+        uint32_t ints = save_and_disable_interrupts();
+        flash_range_erase(USER_CONFIGURATION_OFFSET, FLASH_SECTOR_SIZE);
+        flash_range_program(USER_CONFIGURATION_OFFSET, flash_buffer, FLASH_PAGE_SIZE);
+        restore_interrupts(ints);
+
+        power_up_dac();
+
         return true;
     }
     return false;
 }
 
 bool process_cmd(tlv_header* cmd) {
+    tlv_header* result = ((tlv_header*) result_buffer);
     switch (cmd->type) {
         case SET_CONFIGURATION:
             if (validate_configuration(cmd)) {
-                inactive_working_configuration = (inactive_working_configuration ? 0 : 1);
-                ((tlv_header*) working_configuration[inactive_working_configuration])->length = 0;
+                inactive_working_configuration = inactive_working_configuration ? 0 : 1;
                 reload_config = true;
+                result->type = OK;
+                result->length = 4;
                 return true;
             }
+            break;
         case SAVE_CONFIGURATION: {
             if (cmd->length == 4) {
-                return save_config();
+                save_config = true;
+                result->type = OK;
+                result->length = 4;
+                return true;
             }
+            break;
+        }
+        case FACTORY_RESET: {
+            if (cmd->length == 4) {
+                factory_reset = true;
+                flash_header_tlv flash_header = { 0 };
+                result->type = OK;
+                result->length = 4;
+                return true;
+            }
+            break;
+        }
+        case GET_VERSION: {
+            if (cmd->length == 4) {
+                result->type = OK;
+                result->length = 4 + sizeof(version_status_tlv);
+                version_status_tlv* version = ((version_status_tlv*) result->value);
+                version->header.type = VERSION_STATUS;
+                version->header.length = sizeof(version_status_tlv);
+                version->current_version = CONFIG_VERSION;
+                version->minimum_supported_version = MINIMUM_CONFIG_VERSION;
+                version->reserved = 0;
+                return true;
+            }
+            break;
         }
     }
+    result->type = NOK;
+    result->length = 4;
     return false;
 }
 
@@ -306,20 +371,10 @@ void config_out_packet(struct usb_endpoint *ep) {
     write_offset += buffer->data_len;
 
     const uint16_t transfer_length = ((tlv_header*) working_configuration[inactive_working_configuration])->length;
-    //printf("config_length %d %d\n", transfer_length, write_offset);
     if (transfer_length && write_offset >= transfer_length) {
         // Command complete, fill the result buffer
-        tlv_header* result = ((tlv_header*) result_buffer);
         write_offset = 0;
-
-        if (process_cmd((tlv_header*) working_configuration[inactive_working_configuration])) {
-            result->type = OK;
-            result->length = 4;
-        }
-        else {
-            result->type = NOK;
-            result->length = 4;
-        }
+        process_cmd((tlv_header*) working_configuration[inactive_working_configuration]);
     }
 
     usb_grow_transfer(ep->current_transfer, 1);
@@ -357,6 +412,18 @@ void config_in_packet(struct usb_endpoint *ep) {
 }
 
 void apply_core0_config() {
+    if (save_config) {
+        save_config = false;
+        save_configuration();
+    }
+    if (factory_reset) {
+        factory_reset = false;
+        power_down_dac();
+        uint32_t ints = save_and_disable_interrupts();
+        flash_range_erase(USER_CONFIGURATION_OFFSET, FLASH_SECTOR_SIZE);
+        restore_interrupts(ints);
+        power_up_dac();
+    }
 }
 
 void apply_core1_config() {
