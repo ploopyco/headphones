@@ -51,6 +51,7 @@ static uint8_t *userbuf;
 
 audio_state_config audio_state = {
     .freq = 48000,
+    .de_emphasis_frequency = 0x1, // 48khz
 };
 
 preprocessing_config preprocessing = {
@@ -97,8 +98,6 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     int32_t *out = (int32_t *) userbuf;
     int samples = usb_buffer->data_len / 2;
 
-    // Update filters if required
-    apply_core0_config();
 
     if (preprocessing.reverse_stereo) {
         for (int i = 0; i < samples; i+=2) {
@@ -151,6 +150,15 @@ static void update_volume()
         i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 3, false);
 
         audio_state._volume = audio_state._target_volume;
+    }
+
+    if (audio_state.pcm3060_registers != audio_state._target_pcm3060_registers) {
+        uint8_t buf[3];
+        buf[0] = 68;    // register addr
+        buf[1] = audio_state.target_pcm3060_registers[0]; // Reg 68
+        buf[2] = audio_state.target_pcm3060_registers[1]; // Reg 69
+        i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 3, false);
+        audio_state.pcm3060_registers = audio_state._target_pcm3060_registers;
     }
 }
 
@@ -589,7 +597,7 @@ static bool do_get_current(struct usb_setup_packet *setup) {
     if ((setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
         switch (setup->wValue >> 8u) {
             case 1: { // mute
-                usb_start_tiny_control_in_transfer(audio_state.mute, 1);
+                usb_start_tiny_control_in_transfer((audio_state.mute != 0), 1);
                 return true;
             }
             case 2: { // volume
@@ -705,11 +713,7 @@ static void audio_cmd_packet(struct usb_endpoint *ep) {
         if (audio_control_cmd_t.type == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
             switch (audio_control_cmd_t.cs) {
                 case 1: { // mute
-                    audio_state.mute = buffer->data[0];
-                    uint8_t buf[2];
-                    buf[0] = 68;   // register addr
-                    buf[1] = buffer->data[0] ? 0x3 : 0x0; // data
-                    i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 2, false);
+                    audio_state.mute = buffer->data[0] ? 0x3 : 0x0;
                     break;
                 }
                 case 2: { // volume
@@ -741,7 +745,11 @@ static const struct usb_transfer_type _audio_cmd_transfer_type = {
 
 static bool as_set_alternate(struct usb_interface *interface, uint alt) {
     assert(interface == &as_op_interface);
-    return alt < 2;
+    switch (alt) {
+        case 0: power_down_dac(); return true;
+        case 1: power_up_dac(); return true;
+        default: return false;
+    }
 }
 
 static bool do_set_current(struct usb_setup_packet *setup) {

@@ -96,6 +96,15 @@ typedef struct __attribute__((__packed__)) _filter_configuration_tlv {
     const uint8_t filters[];
 } filter_configuration_tlv;
 
+typedef struct __attribute__((__packed__)) _pcm3060_configuration_tlv {
+    tlv_header header;
+    const uint8_t oversampling;
+    const uint8_t phase;
+    const uint8_t rolloff;
+    const uint8_t de_emphasis;
+} pcm3060_configuration_tlv;
+
+
 typedef struct __attribute__((__packed__)) _version_status_tlv {
     tlv_header header;
     uint16_t current_version;

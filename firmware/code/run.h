@@ -56,7 +56,26 @@ typedef struct _audio_state_config {
         int16_t target_volume[2];
         int32_t _target_volume;
     };
-    bool mute;
+    union {
+        struct {
+            //  Register 68
+            uint8_t mute: 2;
+            uint8_t phase: 1;
+            uint8_t reserved1: 3;
+            uint8_t oversampling: 1;
+            uint8_t reserved2: 1;
+            //  Register 69
+            uint8_t zero_fn: 1;
+            uint8_t zero_polarity: 1;
+            uint8_t reserved3: 2;
+            uint8_t de_emphasis: 1;
+            uint8_t de_emphasis_frequency: 2;
+            uint8_t rolloff: 1;
+        };
+        int8_t target_pcm3060_registers[2];
+        int16_t _target_pcm3060_registers;
+    };
+    int16_t pcm3060_registers;
 } audio_state_config;
 extern audio_state_config audio_state;
 

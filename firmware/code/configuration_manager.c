@@ -56,12 +56,12 @@ static const default_configuration default_config = {
         .f4 = { HIGHSHELF,  {0},    8400,   2,  0.7 },
         .f5 = { PEAKING,    {0},    4800,   3,    5 }
     },
-    .preprocessing = { .header = { PREPROCESSING_CONFIGURATION, sizeof(default_config.preprocessing) }, -0.1f, false, {0} }
+    .preprocessing = { .header = { PREPROCESSING_CONFIGURATION, sizeof(default_config.preprocessing) }, -0.2f, false, {0} }
 };
 
 // Grab the last 4k page of flash for our configuration strutures.
 #ifndef TEST_TARGET
-static const size_t USER_CONFIGURATION_OFFSET = PICO_FLASH_SIZE_BYTES - 0x1000;
+static const size_t USER_CONFIGURATION_OFFSET = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 const uint8_t *user_configuration = (const uint8_t *) (XIP_BASE + USER_CONFIGURATION_OFFSET);
 #endif
 /**
@@ -74,8 +74,6 @@ static uint8_t inactive_working_configuration = 0;
 static uint8_t result_buffer[256] = { U16_TO_U8S_LE(NOK), U16_TO_U8S_LE(4) };
 
 static bool reload_config = false;
-static bool save_config = false;
-static bool factory_reset = false;
 static uint16_t write_offset = 0;
 static uint16_t read_offset = 0;
 
@@ -208,9 +206,16 @@ bool validate_configuration(tlv_header *config) {
                 break;
             case PREPROCESSING_CONFIGURATION: {
                 preprocessing_configuration_tlv* preprocessing_config = (preprocessing_configuration_tlv*) tlv;
-                //printf("Preproc %0.2f %d\n", preprocessing_config->preamp, preprocessing_config->reverse_stereo);
                 if (tlv->length != sizeof(preprocessing_configuration_tlv)) {
                     printf("Preprocessing size missmatch: %u != %zu\n", tlv->length, sizeof(preprocessing_configuration_tlv));
+                    return false;
+                }
+                break;
+            }
+            case PCM3060_CONFIGURATION: {
+                pcm3060_configuration_tlv* pcm3060_config = (pcm3060_configuration_tlv*) tlv;
+                if (tlv->length != sizeof(pcm3060_configuration_tlv)) {
+                    printf("PCM3060 config size missmatch: %u != %zu\n", tlv->length, sizeof(pcm3060_configuration_tlv));
                     return false;
                 }
                 break;
@@ -253,6 +258,14 @@ bool apply_configuration(tlv_header *config) {
                 preprocessing.reverse_stereo = preprocessing_config->reverse_stereo;
                 break;
             }
+            case PCM3060_CONFIGURATION: {
+                pcm3060_configuration_tlv* pcm3060_config = (pcm3060_configuration_tlv*) tlv;
+                audio_state.oversampling = pcm3060_config->oversampling;
+                audio_state.phase = pcm3060_config->phase;
+                audio_state.rolloff = pcm3060_config->rolloff;
+                audio_state.de_emphasis = pcm3060_config->de_emphasis;
+                break;
+            }
             default:
                 break;
         }
@@ -275,23 +288,22 @@ void load_config() {
 }
 
 #ifndef TEST_TARGET
-// Must be in RAM
-uint8_t flash_buffer[FLASH_PAGE_SIZE];
 bool __no_inline_not_in_flash_func(save_configuration)() {
     const uint8_t active_configuration = inactive_working_configuration ? 0 : 1;
     tlv_header* config = (tlv_header*) working_configuration[active_configuration];
 
     if (validate_configuration(config)) {
+        power_down_dac();
+
         const size_t config_length = config->length - (size_t)((size_t)config->value - (size_t)config);
         // Write data to flash
+        uint8_t flash_buffer[FLASH_PAGE_SIZE];
         flash_header_tlv* flash_header = (flash_header_tlv*) flash_buffer;
         flash_header->header.type = FLASH_HEADER;
         flash_header->header.length = sizeof(flash_header) + config_length;
         flash_header->magic = FLASH_MAGIC;
         flash_header->version = CONFIG_VERSION;
         memcpy((void*)(flash_header->tlvs), config->value, config_length);
-
-        power_down_dac();
 
         uint32_t ints = save_and_disable_interrupts();
         flash_range_erase(USER_CONFIGURATION_OFFSET, FLASH_SECTOR_SIZE);
@@ -303,6 +315,15 @@ bool __no_inline_not_in_flash_func(save_configuration)() {
         return true;
     }
     return false;
+}
+
+bool __no_inline_not_in_flash_func(factory_reset)() {
+    power_down_dac();
+    uint32_t ints = save_and_disable_interrupts();
+    flash_range_erase(USER_CONFIGURATION_OFFSET, FLASH_SECTOR_SIZE);
+    restore_interrupts(ints);
+    power_up_dac();
+    return true;
 }
 
 bool process_cmd(tlv_header* cmd) {
@@ -318,8 +339,7 @@ bool process_cmd(tlv_header* cmd) {
             }
             break;
         case SAVE_CONFIGURATION: {
-            if (cmd->length == 4) {
-                save_config = true;
+            if (cmd->length == 4 && save_configuration()) {
                 result->type = OK;
                 result->length = 4;
                 return true;
@@ -327,8 +347,7 @@ bool process_cmd(tlv_header* cmd) {
             break;
         }
         case FACTORY_RESET: {
-            if (cmd->length == 4) {
-                factory_reset = true;
+            if (cmd->length == 4 && factory_reset()) {
                 flash_header_tlv flash_header = { 0 };
                 result->type = OK;
                 result->length = 4;
@@ -409,21 +428,6 @@ void config_in_packet(struct usb_endpoint *ep) {
 
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
-}
-
-void apply_core0_config() {
-    if (save_config) {
-        save_config = false;
-        save_configuration();
-    }
-    if (factory_reset) {
-        factory_reset = false;
-        power_down_dac();
-        uint32_t ints = save_and_disable_interrupts();
-        flash_range_erase(USER_CONFIGURATION_OFFSET, FLASH_SECTOR_SIZE);
-        restore_interrupts(ints);
-        power_up_dac();
-    }
 }
 
 void apply_core1_config() {
