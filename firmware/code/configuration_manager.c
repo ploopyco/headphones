@@ -69,9 +69,10 @@ const uint8_t *user_configuration = (const uint8_t *) (XIP_BASE + USER_CONFIGURA
  * should handle merging configurations where, for example, only a new
  * filter_configuration_tlv was received.
  */
-static uint8_t working_configuration[2][256];
+#define CFG_BUFFER_SIZE 256
+static uint8_t working_configuration[2][CFG_BUFFER_SIZE];
 static uint8_t inactive_working_configuration = 0;
-static uint8_t result_buffer[256] = { U16_TO_U8S_LE(NOK), U16_TO_U8S_LE(4) };
+static uint8_t result_buffer[CFG_BUFFER_SIZE] = { U16_TO_U8S_LE(NOK), U16_TO_U8S_LE(0) };
 
 static bool reload_config = false;
 static uint16_t write_offset = 0;
@@ -295,12 +296,12 @@ bool __no_inline_not_in_flash_func(save_configuration)() {
     if (validate_configuration(config)) {
         power_down_dac();
 
-        const size_t config_length = config->length - (size_t)((size_t)config->value - (size_t)config);
+        const size_t config_length = config->length - ((size_t)config->value - (size_t)config);
         // Write data to flash
         uint8_t flash_buffer[FLASH_PAGE_SIZE];
         flash_header_tlv* flash_header = (flash_header_tlv*) flash_buffer;
         flash_header->header.type = FLASH_HEADER;
-        flash_header->header.length = sizeof(flash_header) + config_length;
+        flash_header->header.length = sizeof(flash_header_tlv) + config_length;
         flash_header->magic = FLASH_MAGIC;
         flash_header->version = CONFIG_VERSION;
         memcpy((void*)(flash_header->tlvs), config->value, config_length);
@@ -342,6 +343,35 @@ bool process_cmd(tlv_header* cmd) {
             if (cmd->length == 4 && save_configuration()) {
                 result->type = OK;
                 result->length = 4;
+                return true;
+            }
+            break;
+        }
+        case GET_ACTIVE_CONFIGURATION: {
+            const uint8_t active_configuration = inactive_working_configuration ? 0 : 1;
+            tlv_header* config = (tlv_header*) working_configuration[active_configuration];
+            if (cmd->length == 4 && config->type == SET_CONFIGURATION && validate_configuration(config)) {
+                result->type = OK;
+                result->length = config->length;
+                memcpy((void*)result->value, config->value, config->length - sizeof(tlv_header));  
+                return true;
+            }
+            break;
+        }
+        case GET_STORED_CONFIGURATION: {
+            if (cmd->length == 4) {
+                flash_header_tlv* config = (flash_header_tlv*) user_configuration;
+                // Assume the default config struct is good, so this can never fail.
+                result->type = OK;
+                // Try to load data from flash
+                if (validate_configuration((tlv_header*)config)) {
+                    const uint16_t payload_length = MIN(CFG_BUFFER_SIZE-sizeof(tlv_header), config->header.length - ((size_t)config->tlvs - (size_t)config));
+                    result->length = payload_length + sizeof(tlv_header);
+                    memcpy((void*)result->value, config->tlvs, payload_length);
+                    return true;
+                }
+                result->length = default_config.set_configuration.length;
+                memcpy((void*)result->value, default_config.set_configuration.value, default_config.set_configuration.length - sizeof(tlv_header));
                 return true;
             }
             break;
@@ -394,6 +424,7 @@ void config_out_packet(struct usb_endpoint *ep) {
         // Command complete, fill the result buffer
         write_offset = 0;
         process_cmd((tlv_header*) working_configuration[inactive_working_configuration]);
+        read_offset = 0;
     }
 
     usb_grow_transfer(ep->current_transfer, 1);
@@ -410,8 +441,9 @@ void config_in_packet(struct usb_endpoint *ep) {
     //printf("config_in_packet %d\n", buffer->data_len);
     assert(buffer->data_max >= 3);
 
+    tlv_header* result = ((tlv_header*) result_buffer);
     const uint16_t transfer_length = ((tlv_header*) result_buffer)->length;
-    const uint16_t packet_length = MIN(buffer->data_max, transfer_length - read_offset);
+    const uint16_t packet_length = MIN(buffer->data_max, (uint16_t)(transfer_length - read_offset));
     memcpy(buffer->data, &result_buffer[read_offset], packet_length);
     buffer->data_len = packet_length;
     read_offset += packet_length;
@@ -420,10 +452,9 @@ void config_in_packet(struct usb_endpoint *ep) {
         // Done
         read_offset = 0;
 
-        // If the client reads again, return an error
-        tlv_header* result = ((tlv_header*) result_buffer);
+        // If the client reads again, return nothing
         result->type = NOK;
-        result->length = 4;
+        result->length = 0;
     }
 
     usb_grow_transfer(ep->current_transfer, 1);
