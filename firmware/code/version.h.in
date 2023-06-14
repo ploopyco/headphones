@@ -1,0 +1,5 @@
+#ifndef VERSION_H
+#define VERSION_H
+/** This template is populated by cmake at build time. */
+static const char* FIRMWARE_GIT_HASH = "@GIT_HASH@";
+#endif
