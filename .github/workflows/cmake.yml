@@ -1,0 +1,31 @@
+name: publish
+on: workflow_dispatch
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake gcc-arm-none-eabi git python3 g++
+
+    - name: Build
+      run: |
+        mkdir ${{github.workspace}}/build
+        cd ${{github.workspace}}/build
+        PICO_SDK_FETCH_FROM_GIT=1 PICO_EXTRAS_FETCH_FROM_GIT=1 cmake ${{github.workspace}}/firmware/code
+        make -j `nproc`
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        draft: true
+        files: |
+          build/ploopy_headphones.*
