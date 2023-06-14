@@ -140,12 +140,16 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
     filter_stages = 0;
 
     while ((ptr + 4) < end) {
-        const uint32_t type = *(uint32_t *)ptr;
-
+        const uint8_t type = *ptr;
         // If you reset the memory, you can hear it when you move the sliders on the UI,
         // is it perhaps OK to leave these and let the old values drop off over time?
-        //bqf_memreset(&bqf_filters_mem_left[filter_stages]);
-        //bqf_memreset(&bqf_filters_mem_right[filter_stages]);
+        // Ensure we at least clear the memory if the filter type changes, as this can sound bad.
+        static uint8_t bqf_filter_types[MAX_FILTER_STAGES] = { 0xFF };
+        if (type != bqf_filter_types[filter_stages]) {
+            bqf_memreset(&bqf_filters_mem_left[filter_stages]);
+            bqf_memreset(&bqf_filters_mem_right[filter_stages]);
+            bqf_filter_types[filter_stages] = type;
+        }
 
         switch (type) {
             case LOWPASS: INIT_FILTER2(lowpass);
