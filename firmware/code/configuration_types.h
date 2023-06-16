@@ -81,7 +81,7 @@ typedef struct __attribute__((__packed__)) _flash_header_tlv {
     tlv_header header;
     uint32_t magic;
     uint32_t version;
-    const uint8_t tlvs[];
+    const uint8_t tlvs[0];
 } flash_header_tlv;
 
 typedef struct __attribute__((__packed__)) _preprocessing_configuration_tlv {
@@ -93,7 +93,7 @@ typedef struct __attribute__((__packed__)) _preprocessing_configuration_tlv {
 
 typedef struct __attribute__((__packed__)) _filter_configuration_tlv {
     tlv_header header;
-    const uint8_t filters[];
+    const uint8_t filters[0];
 } filter_configuration_tlv;
 
 typedef struct __attribute__((__packed__)) _pcm3060_configuration_tlv {
@@ -110,6 +110,7 @@ typedef struct __attribute__((__packed__)) _version_status_tlv {
     uint16_t current_version;
     uint16_t minimum_supported_version;
     uint32_t reserved;
+    const char version_strings[0];  // Firmware version\0Pico SDK version\0
 } version_status_tlv;
 
 typedef struct __attribute__((__packed__)) _default_configuration {

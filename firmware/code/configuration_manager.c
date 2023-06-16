@@ -22,6 +22,8 @@
 #include "configuration_types.h"
 #include "bqf.h"
 #include "run.h"
+#include "version.h"
+#include "pico_base/pico/version.h"
 #ifndef TEST_TARGET
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
@@ -391,14 +393,21 @@ bool process_cmd(tlv_header* cmd) {
         }
         case GET_VERSION: {
             if (cmd->length == 4) {
+                static const char* PICO_SDK_VERSION = PICO_SDK_VERSION_STRING;
+                size_t firmware_version_len = strnlen(FIRMWARE_GIT_HASH, 64);
+                size_t pico_sdk_version_len = strnlen(PICO_SDK_VERSION_STRING, 64);
+
                 result->type = OK;
-                result->length = 4 + sizeof(version_status_tlv);
+                result->length = 4 + sizeof(version_status_tlv) + firmware_version_len + 1 + pico_sdk_version_len + 1;
                 version_status_tlv* version = ((version_status_tlv*) result->value);
                 version->header.type = VERSION_STATUS;
                 version->header.length = sizeof(version_status_tlv);
                 version->current_version = CONFIG_VERSION;
                 version->minimum_supported_version = MINIMUM_CONFIG_VERSION;
-                version->reserved = 0;
+                version->reserved = 0xff;
+                memcpy((void*) version->version_strings, FIRMWARE_GIT_HASH, firmware_version_len + 1);
+                memcpy((void*) &(version->version_strings[firmware_version_len + 1]), PICO_SDK_VERSION_STRING, pico_sdk_version_len + 1);
+
                 return true;
             }
             break;
