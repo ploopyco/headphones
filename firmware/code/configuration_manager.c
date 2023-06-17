@@ -170,9 +170,17 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
     }
 
     if (type_changed) {
+        fix16_t left[2] = { bqf_filters_mem_left[0].x_2, bqf_filters_mem_left[0].x_1 };
+        fix16_t right[2] = { bqf_filters_mem_right[0].x_2, bqf_filters_mem_right[0].x_1 };
         for (int i=0; i<MAX_FILTER_STAGES; i++) {
             bqf_memreset(&bqf_filters_mem_left[i]);
             bqf_memreset(&bqf_filters_mem_right[i]);
+            // The memory structure stores the last 2 input samples, we can replay them into
+            // the new filter rather than starting again from scratch.
+            left[0] = bqf_transform(left[0], &bqf_filters_left[i], &bqf_filters_mem_left[i]);
+            left[1] = bqf_transform(left[1], &bqf_filters_left[i], &bqf_filters_mem_left[i]);
+            right[0] = bqf_transform(right[0], &bqf_filters_left[i], &bqf_filters_mem_left[i]);
+            right[1] = bqf_transform(right[1], &bqf_filters_left[i], &bqf_filters_mem_left[i]);
         }
     }
 }
