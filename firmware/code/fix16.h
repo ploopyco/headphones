@@ -28,6 +28,7 @@ typedef int32_t fix16_t;
 
 static const fix16_t fix16_overflow = 0x80000000;
 static const fix16_t fix16_one = 0x00008000;
+static const fix16_t fix16_zero = 0x00000000;
 
 fix16_t fix16_from_int(int16_t);
 int16_t fix16_to_int(fix16_t);

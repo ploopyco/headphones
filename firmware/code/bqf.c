@@ -483,8 +483,8 @@ fix16_t bqf_transform(fix16_t x, bqf_coeff_t *coefficients, bqf_mem_t *memory) {
 }
 
 void bqf_memreset(bqf_mem_t *memory) {
-    memory->x_1 = fix16_from_dbl(0.0);
-    memory->x_2 = fix16_from_dbl(0.0);
-    memory->y_1 = fix16_from_dbl(0.0);
-    memory->y_2 = fix16_from_dbl(0.0);
+    memory->x_1 = fix16_zero;
+    memory->x_2 = fix16_zero;
+    memory->y_1 = fix16_zero;
+    memory->y_2 = fix16_zero;
 }

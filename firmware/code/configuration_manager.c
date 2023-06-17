@@ -140,17 +140,17 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
     uint8_t *ptr = (uint8_t *)filters->header.value;
     const uint8_t *end = (uint8_t *)filters + filters->header.length;
     filter_stages = 0;
+    bool type_changed = false;
 
     while ((ptr + 4) < end) {
         const uint8_t type = *ptr;
         // If you reset the memory, you can hear it when you move the sliders on the UI,
-        // is it perhaps OK to leave these and let the old values drop off over time?
-        // Ensure we at least clear the memory if the filter type changes, as this can sound bad.
-        static uint8_t bqf_filter_types[MAX_FILTER_STAGES] = { 0xFF };
+        // so try to preserve our remembered values.
+        // If a filter type changes, we do a memory reset.
+        static uint8_t bqf_filter_types[MAX_FILTER_STAGES] = { };
         if (type != bqf_filter_types[filter_stages]) {
-            bqf_memreset(&bqf_filters_mem_left[filter_stages]);
-            bqf_memreset(&bqf_filters_mem_right[filter_stages]);
             bqf_filter_types[filter_stages] = type;
+            type_changed = true;
         }
 
         switch (type) {
@@ -167,6 +167,13 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
                 break;
         }
         filter_stages++;
+    }
+
+    if (type_changed) {
+        for (int i=0; i<MAX_FILTER_STAGES; i++) {
+            bqf_memreset(&bqf_filters_mem_left[i]);
+            bqf_memreset(&bqf_filters_mem_right[i]);
+        }
     }
 }
 
@@ -476,9 +483,11 @@ void config_in_packet(struct usb_endpoint *ep) {
 
 void apply_core1_config() {
     if (reload_config) {
+        uint32_t ints = save_and_disable_interrupts();
         reload_config = false;
         const uint8_t active_configuration = inactive_working_configuration ? 0 : 1;
         apply_configuration((tlv_header*) working_configuration[active_configuration]);
+        restore_interrupts(ints);
     }
 }
 #endif
