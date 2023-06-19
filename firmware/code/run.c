@@ -162,10 +162,7 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     update_volume();
 
     // Update filters if required
-    apply_core1_config();
-
-    // Wait for core 1 to finish
-    //multicore_fifo_pop_blocking();
+    apply_config_changes();
 
     // keep on truckin'
     usb_grow_transfer(ep->current_transfer, 1);
@@ -932,7 +929,6 @@ void usb_sound_card_init() {
     config_in_transfer.type = &config_in_transfer_type;
     usb_set_default_transfer(&ep_configuration_in, &config_in_transfer);
     config_out_transfer.type = &config_out_transfer_type;
-    ep_configuration_out.on_stall_change = configuration_ep_on_stall_change;
     usb_set_default_transfer(&ep_configuration_out, &config_out_transfer);
 
     static struct usb_interface *const boot_device_interfaces[] = {

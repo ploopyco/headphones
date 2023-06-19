@@ -521,7 +521,7 @@ void configuration_ep_on_cancel(struct usb_endpoint *ep) {
     request->length = 0;
 }
 
-void apply_core1_config() {
+void apply_config_changes() {
     if (reload_config) {
         //uint32_t ints = save_and_disable_interrupts();
         reload_config = false;
