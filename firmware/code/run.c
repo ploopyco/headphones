@@ -265,11 +265,6 @@ void setup() {
     // Don't remove this. Don't do it.
     sleep_ms(200);
 
-    // Set data format to 16 bit right justified, MSB first
-    buf[0] = 67;   // register addr
-    buf[1] = 0x03; // data
-    i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 2, false);
-
     // Enable DAC
     buf[0] = 64; // register addr
     buf[1] = 0xE0; // data
@@ -277,6 +272,11 @@ void setup() {
 
     // Same here, pal. Hands off.
     sleep_ms(100);
+
+    // Set data format to 16 bit right justified, MSB first
+    buf[0] = 67;   // register addr
+    buf[1] = 0x03; // data
+    i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 2, false);
 
     i2s_write_obj.sck_pin = PCM3060_DAC_SCK_PIN;
     i2s_write_obj.ws_pin = PCM3060_DAC_WS_PIN;
