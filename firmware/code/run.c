@@ -88,54 +88,6 @@ int main(void) {
         __wfi();
 }
 
-// Here's the meat. It's where the data buffer from USB gets transformed from
-// PCM data into I2S data that gets shipped out to the PCM3060. It really
-// belongs with the other USB-related code due to its utter indecipherability,
-// but it's placed here to emphasize its importance.
-static void _as_audio_packet(struct usb_endpoint *ep) {
-    struct usb_buffer *usb_buffer = usb_current_out_packet_buffer(ep);
-    int16_t *in = (int16_t *) usb_buffer->data;
-    int32_t *out = (int32_t *) userbuf;
-    int samples = usb_buffer->data_len / 2;
-
-
-    if (preprocessing.reverse_stereo) {
-        for (int i = 0; i < samples; i+=2) {
-            out[i] = in[i+1];
-            out[i+1] = in[i];
-        }
-    }
-    else {
-        for (int i = 0; i < samples; i++)
-            out[i] = in[i];
-    }
-
-    multicore_fifo_push_blocking(CORE0_READY);
-    multicore_fifo_push_blocking(samples);
-
-    for (int j = 0; j < filter_stages; j++) {
-        // Left channel filter
-        for (int i = 0; i < samples; i += 2) {
-            fix16_t x_f16 = fix16_mul(fix16_from_int((int16_t) out[i]), preprocessing.preamp);
-
-            x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
-                &bqf_filters_mem_left[j]);
-
-            out[i] = (int32_t) fix16_to_int(x_f16);
-        }
-    }
-
-    // Block until core 1 has finished transforming the data
-    uint32_t ready = multicore_fifo_pop_blocking();
-    multicore_fifo_push_blocking(CORE0_READY);
-
-    i2s_stream_write(&i2s_write_obj, userbuf, samples * 4);
-
-    // keep on truckin'
-    usb_grow_transfer(ep->current_transfer, 1);
-    usb_packet_done(ep);
-}
-
 static void update_volume()
 {
     if (audio_state._volume != audio_state._target_volume) {
@@ -162,22 +114,84 @@ static void update_volume()
     }
 }
 
+// Here's the meat. It's where the data buffer from USB gets transformed from
+// PCM data into I2S data that gets shipped out to the PCM3060. It really
+// belongs with the other USB-related code due to its utter indecipherability,
+// but it's placed here to emphasize its importance.
+static void _as_audio_packet(struct usb_endpoint *ep) {
+    struct usb_buffer *usb_buffer = usb_current_out_packet_buffer(ep);
+    int16_t *in = (int16_t *) usb_buffer->data;
+    int32_t *out = (int32_t *) userbuf;
+    int samples = usb_buffer->data_len / 2;
+
+    if (preprocessing.reverse_stereo) {
+        for (int i = 0; i < samples; i+=2) {
+            out[i] = in[i+1];
+            out[i+1] = in[i];
+        }
+    }
+    else {
+        for (int i = 0; i < samples; i++)
+            out[i] = in[i];
+    }
+ 
+    // Make sure core 1 is ready for us.
+    multicore_fifo_pop_blocking();
+    multicore_fifo_push_blocking(CORE0_READY);
+    multicore_fifo_push_blocking(samples);
+
+    for (int j = 0; j < filter_stages; j++) {
+        // Left channel filter
+        for (int i = 0; i < samples; i += 2) {
+            fix16_t x_f16 = fix16_mul(fix16_from_int((int16_t) out[i]), preprocessing.preamp);
+
+            x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
+                &bqf_filters_mem_left[j]);
+
+            out[i] = (int32_t) fix16_to_int(x_f16);
+        }
+    }
+
+    // Block until core 1 has finished transforming the data
+    uint32_t ready = multicore_fifo_pop_blocking();
+    multicore_fifo_push_blocking(CORE0_READY);
+
+    // Update the volume if required. We do this from core1 as
+    // core0 is more heavily loaded, doing this from core0 can
+    // lead to audio crackling.
+    update_volume();
+
+    // Update filters if required
+    apply_core1_config();
+
+    // Wait for core 1 to finish
+    //multicore_fifo_pop_blocking();
+
+    // keep on truckin'
+    usb_grow_transfer(ep->current_transfer, 1);
+    usb_packet_done(ep);
+}
+
 void core1_entry() {
     uint8_t *userbuf = (uint8_t *) multicore_fifo_pop_blocking();
     int32_t *out = (int32_t *) userbuf;
 
+    // Signal that the thread has started
     multicore_fifo_push_blocking(CORE1_READY);
 
     while (true) {
+        // Signal to core 0 that we are ready to accept new data
+        multicore_fifo_push_blocking(CORE1_READY);
+
         // Block until the userbuf is filled with data
         uint32_t ready = multicore_fifo_pop_blocking();
         while (ready != CORE0_READY)
             ready = multicore_fifo_pop_blocking();
         
-        uint32_t limit = multicore_fifo_pop_blocking();
+        const uint32_t samples = multicore_fifo_pop_blocking();
 
         for (int j = 0; j < filter_stages; j++) {
-            for (int i = 1; i < limit; i += 2) {
+            for (int i = 1; i < samples; i += 2) {
                 fix16_t x_f16 = fix16_mul(fix16_from_int((int16_t) out[i]), preprocessing.preamp);
 
                 x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
@@ -193,13 +207,7 @@ void core1_entry() {
         // Wait for Core 0 to finish running its filtering before we apply config updates
         multicore_fifo_pop_blocking();
 
-        // Update filters if required
-        apply_core1_config();
-
-        // Update the volume if required. We do this from core1 as
-        // core0 is more heavily loaded, doing this from core0 can
-        // lead to audio crackling.
-        update_volume();
+        i2s_stream_write(&i2s_write_obj, userbuf, samples * 4);
     }
 }
 
@@ -587,6 +595,7 @@ static const struct usb_transfer_type config_in_transfer_type = {
 
 static const struct usb_transfer_type config_out_transfer_type = {
     .on_packet = config_out_packet,
+    .on_cancel = configuration_ep_on_cancel,
     .initial_packet_count = 1,
 };
 
@@ -923,6 +932,7 @@ void usb_sound_card_init() {
     config_in_transfer.type = &config_in_transfer_type;
     usb_set_default_transfer(&ep_configuration_in, &config_in_transfer);
     config_out_transfer.type = &config_out_transfer_type;
+    ep_configuration_out.on_stall_change = configuration_ep_on_stall_change;
     usb_set_default_transfer(&ep_configuration_out, &config_out_transfer);
 
     static struct usb_interface *const boot_device_interfaces[] = {

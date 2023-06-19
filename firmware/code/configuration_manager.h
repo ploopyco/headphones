@@ -25,7 +25,7 @@ struct usb_endpoint;
 #define INIT_FILTER2(T) { \
     filter2 *args = (filter2 *)ptr; \
     bqf_##T##_config(SAMPLING_FREQ, args->f0, args->Q, &bqf_filters_left[filter_stages]); \
-    bqf_##T##_config(SAMPLING_FREQ, args->f0, args->Q, &bqf_filters_right[filter_stages]); \
+    memcpy(&bqf_filters_right[filter_stages], &bqf_filters_left[filter_stages], sizeof(bqf_coeff_t)); \
     ptr += sizeof(filter2); \
     break; \
     }
@@ -33,13 +33,15 @@ struct usb_endpoint;
 #define INIT_FILTER3(T) { \
     filter3 *args = (filter3 *)ptr; \
     bqf_##T##_config(SAMPLING_FREQ, args->f0, args->db_gain, args->Q, &bqf_filters_left[filter_stages]); \
-    bqf_##T##_config(SAMPLING_FREQ, args->f0, args->db_gain, args->Q, &bqf_filters_right[filter_stages]); \
+    memcpy(&bqf_filters_right[filter_stages], &bqf_filters_left[filter_stages], sizeof(bqf_coeff_t)); \
     ptr += sizeof(filter3); \
     break; \
     }
 
 void config_in_packet(struct usb_endpoint *ep);
 void config_out_packet(struct usb_endpoint *ep);
+void configuration_ep_on_stall_change(struct usb_endpoint *ep);
+void configuration_ep_on_cancel(struct usb_endpoint *ep);
 extern void load_config();
 extern void apply_core1_config();
 

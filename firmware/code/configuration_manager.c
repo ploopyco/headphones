@@ -170,17 +170,18 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
     }
 
     if (type_changed) {
+        // The memory structure stores the last 2 input samples, we can replay them into
+        // the new filter rather than starting again from scratch.
         fix16_t left[2] = { bqf_filters_mem_left[0].x_2, bqf_filters_mem_left[0].x_1 };
         fix16_t right[2] = { bqf_filters_mem_right[0].x_2, bqf_filters_mem_right[0].x_1 };
-        for (int i=0; i<MAX_FILTER_STAGES; i++) {
+        for (int i=0; i<filter_stages; i++) {
             bqf_memreset(&bqf_filters_mem_left[i]);
             bqf_memreset(&bqf_filters_mem_right[i]);
-            // The memory structure stores the last 2 input samples, we can replay them into
-            // the new filter rather than starting again from scratch.
+
             left[0] = bqf_transform(left[0], &bqf_filters_left[i], &bqf_filters_mem_left[i]);
             left[1] = bqf_transform(left[1], &bqf_filters_left[i], &bqf_filters_mem_left[i]);
-            right[0] = bqf_transform(right[0], &bqf_filters_left[i], &bqf_filters_mem_left[i]);
-            right[1] = bqf_transform(right[1], &bqf_filters_left[i], &bqf_filters_mem_left[i]);
+            right[0] = bqf_transform(right[0], &bqf_filters_right[i], &bqf_filters_mem_right[i]);
+            right[1] = bqf_transform(right[1], &bqf_filters_right[i], &bqf_filters_mem_right[i]);
         }
     }
 }
@@ -444,17 +445,28 @@ void config_out_packet(struct usb_endpoint *ep) {
     struct usb_buffer *buffer = usb_current_out_packet_buffer(ep);
     //printf("config_out_packet %d\n", buffer->data_len);
 
-    memcpy(&working_configuration[inactive_working_configuration][write_offset], buffer->data, buffer->data_len);
-    write_offset += buffer->data_len;
-
-    const uint16_t transfer_length = ((tlv_header*) working_configuration[inactive_working_configuration])->length;
-    if (transfer_length && write_offset >= transfer_length) {
-        // Command complete, fill the result buffer
-        write_offset = 0;
-        process_cmd((tlv_header*) working_configuration[inactive_working_configuration]);
-        read_offset = 0;
+    if (write_offset + buffer->data_len > CFG_BUFFER_SIZE)
+    {
+        // Dont actually write, but this will prevent us for attempting to process this command if a zero byte packet arrives later.
+        write_offset += buffer->data_len;
+        printf("Error! Overflow receive buffer [write_offset=%d]\n", write_offset);
+        tlv_header* result = ((tlv_header*) result_buffer);
+        result->type = NOK;
+        result->length = 4;
     }
+    else
+    {
+        memcpy(&working_configuration[inactive_working_configuration][write_offset], buffer->data, buffer->data_len);
+        write_offset += buffer->data_len;
 
+        const uint16_t transfer_length = ((tlv_header*) working_configuration[inactive_working_configuration])->length;
+        if (transfer_length && write_offset >= transfer_length) {
+            // Command complete, fill the result buffer
+            write_offset = 0;
+            process_cmd((tlv_header*) working_configuration[inactive_working_configuration]);
+            read_offset = 0;
+        }
+    }
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
 }
@@ -479,6 +491,7 @@ void config_in_packet(struct usb_endpoint *ep) {
     if (read_offset >= transfer_length) {
         // Done
         read_offset = 0;
+        write_offset = 0;
 
         // If the client reads again, return nothing
         result->type = NOK;
@@ -489,13 +502,32 @@ void config_in_packet(struct usb_endpoint *ep) {
     usb_packet_done(ep);
 }
 
+void configuration_ep_on_stall_change(struct usb_endpoint *ep) {
+    printf("Config EP stall change: %d\n", usb_is_endpoint_stalled(ep));
+    if (!usb_is_endpoint_stalled(ep)) {
+        write_offset = 0;
+        tlv_header* request = ((tlv_header*) working_configuration[inactive_working_configuration]);
+        request->type = NOK;
+        request->length = 0;
+    }
+}
+
+void configuration_ep_on_cancel(struct usb_endpoint *ep) {
+    printf("Config EP on cancel\n");
+
+    write_offset = 0;
+    tlv_header* request = ((tlv_header*) working_configuration[inactive_working_configuration]);
+    request->type = NOK;
+    request->length = 0;
+}
+
 void apply_core1_config() {
     if (reload_config) {
-        uint32_t ints = save_and_disable_interrupts();
+        //uint32_t ints = save_and_disable_interrupts();
         reload_config = false;
         const uint8_t active_configuration = inactive_working_configuration ? 0 : 1;
         apply_configuration((tlv_header*) working_configuration[active_configuration]);
-        restore_interrupts(ints);
+        //restore_interrupts(ints);
     }
 }
 #endif
