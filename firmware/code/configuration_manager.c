@@ -148,6 +148,7 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
         // so try to preserve our remembered values.
         // If a filter type changes, we do a memory reset.
         static uint8_t bqf_filter_types[MAX_FILTER_STAGES] = { };
+        static uint32_t bqf_filter_checksum[MAX_FILTER_STAGES] = { };
         if (type != bqf_filter_types[filter_stages]) {
             bqf_filter_types[filter_stages] = type;
             type_changed = true;
@@ -502,19 +503,8 @@ void config_in_packet(struct usb_endpoint *ep) {
     usb_packet_done(ep);
 }
 
-void configuration_ep_on_stall_change(struct usb_endpoint *ep) {
-    printf("Config EP stall change: %d\n", usb_is_endpoint_stalled(ep));
-    if (!usb_is_endpoint_stalled(ep)) {
-        write_offset = 0;
-        tlv_header* request = ((tlv_header*) working_configuration[inactive_working_configuration]);
-        request->type = NOK;
-        request->length = 0;
-    }
-}
-
 void configuration_ep_on_cancel(struct usb_endpoint *ep) {
-    printf("Config EP on cancel\n");
-
+    printf("Cancel request on config EP\n");
     write_offset = 0;
     tlv_header* request = ((tlv_header*) working_configuration[inactive_working_configuration]);
     request->type = NOK;
@@ -523,11 +513,9 @@ void configuration_ep_on_cancel(struct usb_endpoint *ep) {
 
 void apply_config_changes() {
     if (reload_config) {
-        //uint32_t ints = save_and_disable_interrupts();
         reload_config = false;
         const uint8_t active_configuration = inactive_working_configuration ? 0 : 1;
         apply_configuration((tlv_header*) working_configuration[active_configuration]);
-        //restore_interrupts(ints);
     }
 }
 #endif

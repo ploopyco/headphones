@@ -24,16 +24,26 @@ struct usb_endpoint;
 
 #define INIT_FILTER2(T) { \
     filter2 *args = (filter2 *)ptr; \
-    bqf_##T##_config(SAMPLING_FREQ, args->f0, args->Q, &bqf_filters_left[filter_stages]); \
-    memcpy(&bqf_filters_right[filter_stages], &bqf_filters_left[filter_stages], sizeof(bqf_coeff_t)); \
+    uint32_t checksum = 0; \
+    for (int i = 0; i < sizeof(filter2) / 4; i++) checksum ^= ((uint32_t*) args)[i]; \
+    if (checksum != bqf_filter_checksum[filter_stages]) { \
+        bqf_##T##_config(SAMPLING_FREQ, args->f0, args->Q, &bqf_filters_left[filter_stages]); \
+        memcpy(&bqf_filters_right[filter_stages], &bqf_filters_left[filter_stages], sizeof(bqf_coeff_t)); \
+        bqf_filter_checksum[filter_stages] = checksum; \
+    } \
     ptr += sizeof(filter2); \
     break; \
     }
 
 #define INIT_FILTER3(T) { \
     filter3 *args = (filter3 *)ptr; \
-    bqf_##T##_config(SAMPLING_FREQ, args->f0, args->db_gain, args->Q, &bqf_filters_left[filter_stages]); \
-    memcpy(&bqf_filters_right[filter_stages], &bqf_filters_left[filter_stages], sizeof(bqf_coeff_t)); \
+    uint32_t checksum = 0; \
+    for (int i = 0; i < sizeof(filter3) / 4; i++) checksum ^= ((uint32_t*) args)[i]; \
+    if (checksum != bqf_filter_checksum[filter_stages]) { \
+        bqf_##T##_config(SAMPLING_FREQ, args->f0, args->db_gain, args->Q, &bqf_filters_left[filter_stages]); \
+        memcpy(&bqf_filters_right[filter_stages], &bqf_filters_left[filter_stages], sizeof(bqf_coeff_t)); \
+        bqf_filter_checksum[filter_stages] = checksum; \
+    } \
     ptr += sizeof(filter3); \
     break; \
     }
