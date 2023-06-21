@@ -143,12 +143,12 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     for (int j = 0; j < filter_stages; j++) {
         // Left channel filter
         for (int i = 0; i < samples; i += 2) {
-            fix16_t x_f16 = fix16_mul(fix16_from_int((int16_t) out[i]), preprocessing.preamp);
+            fix16_t x_f16 = fix16_mul(fix16_from_s16sample((int16_t) out[i]), preprocessing.preamp);
 
             x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
                 &bqf_filters_mem_left[j]);
 
-            out[i] = (int32_t) fix16_to_int(x_f16);
+            out[i] = (int32_t) fix16_to_s16sample(x_f16);
         }
     }
 
@@ -189,12 +189,12 @@ void core1_entry() {
 
         for (int j = 0; j < filter_stages; j++) {
             for (int i = 1; i < samples; i += 2) {
-                fix16_t x_f16 = fix16_mul(fix16_from_int((int16_t) out[i]), preprocessing.preamp);
+                fix16_t x_f16 = fix16_mul(fix16_from_s16sample((int16_t) out[i]), preprocessing.preamp);
 
                 x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
                     &bqf_filters_mem_right[j]);
 
-                out[i] = (int16_t) fix16_to_int(x_f16);
+                out[i] = (int16_t) fix16_to_s16sample(x_f16);
             }
         }
 

@@ -22,16 +22,31 @@
 #ifndef FIX16_H
 #define FIX16_H
 
+#include <stdbool.h>
 #include <inttypes.h>
 
+// During development, it can be useful to run with real double values for reference.
+//#define USE_DOUBLE
+#ifdef USE_DOUBLE
+typedef double fix16_t;
+static const fix16_t fix16_zero = 0;
+#else
+// We normalize all values into the range -1..1 with 1 extra bit for overflows
+// and one bit for the sign. We allow fixed point values to overflow, but they
+// are clipped at the point they are written back to a s16sample.
+//
+// The reason for normalizing the samples is because the filter coefficients are
+// small (usually in the range -1..1), by normalizing everything the coefficients
+// get lots of additional bits of precision.
 typedef int32_t fix16_t;
-
 static const fix16_t fix16_overflow = 0x80000000;
-static const fix16_t fix16_one = 0x00008000;
+static const fix16_t fix16_one_normalized = 0x00008000;
+static const fix16_t fix16_one = 0x20000000;
 static const fix16_t fix16_zero = 0x00000000;
+#endif
 
-fix16_t fix16_from_int(int16_t);
-int16_t fix16_to_int(fix16_t);
+fix16_t fix16_from_s16sample(int16_t);
+int16_t fix16_to_s16sample(fix16_t);
 fix16_t fix16_from_dbl(double);
 double fix16_to_dbl(fix16_t);
 

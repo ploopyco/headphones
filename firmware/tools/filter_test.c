@@ -59,21 +59,21 @@ int main(int argc, char* argv[])
         for (int i = 0; i < samples; i ++)
         {
             // Left channel filter
-            fix16_t x_f16 = fix16_from_int((int16_t) out[i]);
+            fix16_t x_f16 = fix16_from_s16sample((int16_t) out[i]);
 
             x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
                 &bqf_filters_mem_left[j]);
 
-            out[i] = (int32_t) fix16_to_int(x_f16);
+            out[i] = (int32_t) fix16_to_s16sample(x_f16);
 
             // Right channel filter
             i++;
-            x_f16 = fix16_from_int((int16_t) out[i]);
+            x_f16 = fix16_from_s16sample((int16_t) out[i]);
 
             x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
                 &bqf_filters_mem_right[j]);
 
-            out[i] = (int16_t) fix16_to_int(x_f16);
+            out[i] = (int16_t) fix16_to_s16sample(x_f16);
         }
     }
 

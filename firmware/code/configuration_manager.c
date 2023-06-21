@@ -22,9 +22,9 @@
 #include "configuration_types.h"
 #include "bqf.h"
 #include "run.h"
+#ifndef TEST_TARGET
 #include "version.h"
 #include "pico_base/pico/version.h"
-#ifndef TEST_TARGET
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "pico/usb_device.h"
@@ -276,6 +276,7 @@ bool apply_configuration(tlv_header *config) {
             case FILTER_CONFIGURATION:
                 apply_filter_configuration((filter_configuration_tlv*) tlv);
                 break;
+#ifndef TEST_TARGET
             case PREPROCESSING_CONFIGURATION: {
                 preprocessing_configuration_tlv* preprocessing_config = (preprocessing_configuration_tlv*) tlv;
                 preprocessing.preamp = fix16_from_dbl(1.0 + preprocessing_config->preamp);
@@ -290,6 +291,7 @@ bool apply_configuration(tlv_header *config) {
                 audio_state.de_emphasis = pcm3060_config->de_emphasis;
                 break;
             }
+#endif
             default:
                 break;
         }
