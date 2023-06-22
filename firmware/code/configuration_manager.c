@@ -103,10 +103,8 @@ bool validate_filter_configuration(filter_configuration_tlv *filters)
         case BANDPASSPEAK:
         case NOTCH:
         case ALLPASS: {
-            //filter2 *args = (filter2 *)ptr;
-            //printf("Found Filter %d: %0.2f %0.2f\n", args->type, args->f0, args->Q);
             if (remaining < sizeof(filter2)) {
-                printf("Error! Not enough data left for filter2 (%d)..\n", remaining);
+                printf("Error! Not enough data left for filter2 (%d)\n", remaining);
                 return false;
             }
             ptr += sizeof(filter2);
@@ -115,15 +113,27 @@ bool validate_filter_configuration(filter_configuration_tlv *filters)
         case PEAKING:
         case LOWSHELF:
         case HIGHSHELF: {
-            //filter3 *args = (filter3 *)ptr;
-            //printf("Found Filter %d: %0.2f %0.2f %0.2f\n", args->type, args->f0, args->db_gain, args->Q);
             if (remaining < sizeof(filter3)) {
-                printf("Error! Not enough data left for filter3 (%d)..\n", remaining);
+                printf("Error! Not enough data left for filter3 (%d)\n", remaining);
                 return false;
             }
             ptr += sizeof(filter3);
             break;
         }
+        case CUSTOMIIR:  {
+            filter6 *args = (filter6 *)ptr;
+            if (remaining < sizeof(filter6)) {
+                printf("Error! Not enough data left for filter6 (%d)\n", remaining);
+                return false;
+            }
+            if (args->a0 == 0.0) {
+                printf("Error! The a0 co-efficient of an IIR filter must not be 0.\n");
+                return false;
+            }
+            ptr += sizeof(filter6);
+            break;
+        }
+
         default:
             printf("Unknown filter type\n");
             return false;
@@ -164,26 +174,42 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
             case PEAKING: INIT_FILTER3(peaking);
             case LOWSHELF: INIT_FILTER3(lowshelf);
             case HIGHSHELF: INIT_FILTER3(highshelf);
+            case CUSTOMIIR: {
+                filter6 *args = (filter6 *)ptr;
+                uint32_t checksum = 0;
+                for (int i = 0; i < sizeof(filter6) / 4; i++) checksum ^= ((uint32_t*) args)[i];
+                if (checksum != bqf_filter_checksum[filter_stages]) {
+                    bqf_filters_left[filter_stages].a0 = fix16_from_dbl(1.0);
+                    bqf_filters_left[filter_stages].a1 = fix16_from_dbl(args->a1/args->a0);
+                    bqf_filters_left[filter_stages].a2 = fix16_from_dbl(args->a2/args->a0);
+                    bqf_filters_left[filter_stages].b0 = fix16_from_dbl(args->b0/args->a0);
+                    bqf_filters_left[filter_stages].b1 = fix16_from_dbl(args->b1/args->a0);
+                    bqf_filters_left[filter_stages].b2 = fix16_from_dbl(args->b2/args->a0);
+                    memcpy(&bqf_filters_right[filter_stages], &bqf_filters_left[filter_stages], sizeof(bqf_coeff_t));
+                    bqf_filter_checksum[filter_stages] = checksum;
+                }
+                ptr += sizeof(filter6);
+                type_changed = true; // Always flush our memory
+                break;
+            }
             default:
                 break;
         }
-        filter_stages++;
-    }
+        if (type_changed) {
+            // The memory structure stores the last 2 input samples, we can replay them into
+            // the new filter rather than starting again from scratch.
+            fix16_t left[2] = { bqf_filters_mem_left[filter_stages].x_2, bqf_filters_mem_left[filter_stages].x_1 };
+            fix16_t right[2] = { bqf_filters_mem_right[filter_stages].x_2, bqf_filters_mem_right[filter_stages].x_1 };
 
-    if (type_changed) {
-        // The memory structure stores the last 2 input samples, we can replay them into
-        // the new filter rather than starting again from scratch.
-        fix16_t left[2] = { bqf_filters_mem_left[0].x_2, bqf_filters_mem_left[0].x_1 };
-        fix16_t right[2] = { bqf_filters_mem_right[0].x_2, bqf_filters_mem_right[0].x_1 };
-        for (int i=0; i<filter_stages; i++) {
-            bqf_memreset(&bqf_filters_mem_left[i]);
-            bqf_memreset(&bqf_filters_mem_right[i]);
+            bqf_memreset(&bqf_filters_mem_left[filter_stages]);
+            bqf_memreset(&bqf_filters_mem_right[filter_stages]);
 
-            left[0] = bqf_transform(left[0], &bqf_filters_left[i], &bqf_filters_mem_left[i]);
-            left[1] = bqf_transform(left[1], &bqf_filters_left[i], &bqf_filters_mem_left[i]);
-            right[0] = bqf_transform(right[0], &bqf_filters_right[i], &bqf_filters_mem_right[i]);
-            right[1] = bqf_transform(right[1], &bqf_filters_right[i], &bqf_filters_mem_right[i]);
+            left[0] = bqf_transform(left[0], &bqf_filters_left[filter_stages], &bqf_filters_mem_left[filter_stages]);
+            left[1] = bqf_transform(left[1], &bqf_filters_left[filter_stages], &bqf_filters_mem_left[filter_stages]);
+            right[0] = bqf_transform(right[0], &bqf_filters_right[filter_stages], &bqf_filters_mem_right[filter_stages]);
+            right[1] = bqf_transform(right[1], &bqf_filters_right[filter_stages], &bqf_filters_mem_right[filter_stages]);
         }
+        filter_stages++;
     }
 }
 

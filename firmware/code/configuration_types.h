@@ -17,7 +17,7 @@
 #include <stdint.h>
 
 #define FLASH_MAGIC 0x2E8AFEDD
-#define CONFIG_VERSION 1
+#define CONFIG_VERSION 2
 #define MINIMUM_CONFIG_VERSION 1
 
 enum structure_types {
@@ -65,6 +65,17 @@ typedef struct __attribute__((__packed__)) _filter3 {
     double Q;
 } filter3;
 
+typedef struct __attribute__((__packed__)) _filter6 {
+    uint8_t type;
+    uint8_t reserved[3];
+    double a0;
+    double a1;
+    double a2;
+    double b0;
+    double b1;
+    double b2;
+} filter6;
+
 enum filter_type {
     LOWPASS = 0,
     HIGHPASS,
@@ -74,7 +85,8 @@ enum filter_type {
     ALLPASS,
     PEAKING,
     LOWSHELF,
-    HIGHSHELF
+    HIGHSHELF,
+    CUSTOMIIR
 };
 
 typedef struct __attribute__((__packed__)) _flash_header_tlv {
