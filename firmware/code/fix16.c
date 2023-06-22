@@ -61,15 +61,15 @@ fix16_t fix16_mul(fix16_t inArg0, fix16_t inArg1) {
 }
 #else
 fix16_t fix16_from_s16sample(int16_t a) {
-    return a * fix16_one_normalized;
+    return a * fix16_lsb;
 }
 
 int16_t fix16_to_s16sample(fix16_t a) {
     // Handle rounding up front, adding one can cause an overflow/underflow
     if (a < 0) {
-        a -= (fix16_one_normalized >> 1);
+        a -= (fix16_lsb >> 1);
     } else {
-        a += (fix16_one_normalized >> 1);
+        a += (fix16_lsb >> 1);
     }
 
     // Saturate the value if an overflow has occurred
@@ -100,9 +100,10 @@ double fix16_to_dbl(fix16_t a) {
 
 // We work in 64bits then shift the result to get
 // the bit representing 1 back into the correct position.
+// i.e. 1*1 == 1, so 20000000^2 >> 25 = 20000000
 fix16_t fix16_mul(fix16_t inArg0, fix16_t inArg1) {
     const int64_t product = (int64_t)inArg0 * inArg1;
-    fix16_t result = product >> 29;
+    fix16_t result = product >> 25;
     // Handle rounding where we are choppping off low order bits
     // Disabled for now, too much load. We get crackling when adjusting
     // the volume.

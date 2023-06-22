@@ -30,18 +30,18 @@
 #ifdef USE_DOUBLE
 typedef double fix16_t;
 static const fix16_t fix16_zero = 0;
+static const fix16_t fix16_one = 1;
 #else
-// We normalize all values into the range -1..1 with 1 extra bit for overflows
+// We normalize all values into the range -32..32 with 1 extra bit for overflows
 // and one bit for the sign. We allow fixed point values to overflow, but they
 // are clipped at the point they are written back to a s16sample.
 //
 // The reason for normalizing the samples is because the filter coefficients are
-// small (usually in the range -1..1), by normalizing everything the coefficients
+// small (usually well within in the range -32..32), by normalizing everything the coefficients
 // get lots of additional bits of precision.
 typedef int32_t fix16_t;
-static const fix16_t fix16_overflow = 0x80000000;
-static const fix16_t fix16_one_normalized = 0x00008000;
-static const fix16_t fix16_one = 0x20000000;
+static const fix16_t fix16_lsb = 0x8000;
+static const fix16_t fix16_one = 0x002000000;
 static const fix16_t fix16_zero = 0x00000000;
 #endif
 
