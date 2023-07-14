@@ -8,9 +8,10 @@ add_executable(filter_test
     filter_test.c
     ../code/fix16.c
     ../code/bqf.c
-    ../code/user.c
+    ../code/configuration_manager.c
 )
 
+target_compile_definitions(filter_test PRIVATE TEST_TARGET)
 target_include_directories(filter_test PRIVATE ${CMAKE_SOURCE_DIR}/../code)
 
 # TODO: user.c includes run.h to get the definition for SAMPLING_FREQ, but this

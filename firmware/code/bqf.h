@@ -41,6 +41,16 @@ typedef struct _bqf_mem_t {
     fix16_t y_2;
 } bqf_mem_t;
 
+// In reality we do not have enough CPU resource to run 8 filtering
+// stages without some optimisation.
+#define MAX_FILTER_STAGES 8
+extern int filter_stages;
+
+extern bqf_coeff_t bqf_filters_left[MAX_FILTER_STAGES];
+extern bqf_coeff_t bqf_filters_right[MAX_FILTER_STAGES];
+extern bqf_mem_t bqf_filters_mem_left[MAX_FILTER_STAGES];
+extern bqf_mem_t bqf_filters_mem_right[MAX_FILTER_STAGES];
+
 #define Q_BUTTERWORTH 0.707106781
 #define Q_BESSEL 0.577350269
 #define Q_LINKWITZ_RILEY 0.5
@@ -57,6 +67,5 @@ void bqf_highshelf_config(double, double, double, double, bqf_coeff_t *);
 
 fix16_t bqf_transform(fix16_t, bqf_coeff_t *, bqf_mem_t *);
 void bqf_memreset(bqf_mem_t *);
-
 
 #endif

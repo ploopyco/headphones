@@ -28,6 +28,7 @@
 
 #include "ringbuf.h"
 #include "i2s.h"
+#include "fix16.h"
 
 /*****************************************************************************
  * USB-related definitions begin here.
@@ -44,6 +45,39 @@
 #define DEFAULT_VOLUME ENCODE_DB(0)
 #define MAX_VOLUME ENCODE_DB(0)
 #define VOLUME_RESOLUTION ENCODE_DB(0.5f)
+
+typedef struct _audio_state_config {
+    uint32_t freq;
+    union {
+        int16_t volume[2];
+        int32_t _volume;
+    };
+    union {
+        int16_t target_volume[2];
+        int32_t _target_volume;
+    };
+    union {
+        struct {
+            //  Register 68
+            uint8_t mute: 2;
+            uint8_t phase: 1;
+            uint8_t reserved1: 3;
+            uint8_t oversampling: 1;
+            uint8_t reserved2: 1;
+            //  Register 69
+            uint8_t zero_fn: 1;
+            uint8_t zero_polarity: 1;
+            uint8_t reserved3: 2;
+            uint8_t de_emphasis: 1;
+            uint8_t de_emphasis_frequency: 2;
+            uint8_t rolloff: 1;
+        };
+        int8_t target_pcm3060_registers[2];
+        int16_t _target_pcm3060_registers;
+    };
+    int16_t pcm3060_registers;
+} audio_state_config;
+extern audio_state_config audio_state;
 
 typedef struct _audio_device_config {
     struct usb_configuration_descriptor descriptor;
@@ -68,12 +102,23 @@ typedef struct _audio_device_config {
         USB_Audio_StdDescriptor_StreamEndpoint_Spc_t audio;
     } ep1;
     struct usb_endpoint_descriptor_long ep2;
+
+    struct usb_interface_descriptor configuration_interface;
+    struct usb_endpoint_descriptor ep3;
+    struct usb_endpoint_descriptor ep4;
 } audio_device_config;
+
+typedef struct _preprocessing_config {
+    fix16_t preamp;
+    int reverse_stereo;
+} preprocessing_config;
+
+extern preprocessing_config preprocessing;
 
 static char *descriptor_strings[] = {
     "Ploopy Corporation",
     "Ploopy Headphones",
-    "000000000001"
+    "0000000000000001" // Dummy serial number, will be overwritten with the value read from the SPI flash chip. Must be 17bytes.
 };
 
 /*****************************************************************************
@@ -132,5 +177,6 @@ static bool do_set_current(struct usb_setup_packet *);
 static bool ac_setup_request_handler(__unused struct usb_interface *, struct usb_setup_packet *);
 bool _as_setup_request_handler(__unused struct usb_endpoint *, struct usb_setup_packet *);
 void usb_sound_card_init(void);
-
+extern void power_down_dac();
+extern void power_up_dac();
 #endif

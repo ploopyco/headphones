@@ -25,13 +25,52 @@
 #include <limits.h>
 #include "fix16.h"
 
-fix16_t fix16_from_int(int16_t a) {
-    return a * fix16_one;
+#ifdef USE_DOUBLE
+fix16_t fix16_from_s16sample(int16_t a) {
+    return a;
 }
 
-int16_t fix16_to_int(fix16_t a) {
+int16_t fix16_to_s16sample(fix16_t a) {
     // Handle rounding up front, adding one can cause an overflow/underflow
-    a+=(fix16_one >> 1);
+    if (a < 0) {
+        a -= 0.5;
+    } else {
+        a += 0.5;
+    }
+
+    // Saturate the value if an overflow has occurred
+    if (a < SHRT_MIN) {
+        return SHRT_MIN;
+    }
+    if (a < SHRT_MAX) {
+        return SHRT_MAX;
+    }
+    return a;
+}
+
+fix16_t fix16_from_dbl(double a) {
+    return a;
+}
+
+double fix16_to_dbl(fix16_t a) {
+    return a;
+}
+
+fix16_t fix16_mul(fix16_t inArg0, fix16_t inArg1) {
+    return inArg0 * inArg1;
+}
+#else
+fix16_t fix16_from_s16sample(int16_t a) {
+    return a * fix16_lsb;
+}
+
+int16_t fix16_to_s16sample(fix16_t a) {
+    // Handle rounding up front, adding one can cause an overflow/underflow
+    if (a < 0) {
+        a -= (fix16_lsb >> 1);
+    } else {
+        a += (fix16_lsb >> 1);
+    }
 
     // Saturate the value if an overflow has occurred
     uint32_t upper = (a >> 30);
@@ -59,12 +98,25 @@ double fix16_to_dbl(fix16_t a) {
     return (double)a / fix16_one;
 }
 
-// hic sunt dracones
+// We work in 64bits then shift the result to get
+// the bit representing 1 back into the correct position.
+// i.e. 1*1 == 1, so 20000000^2 >> 25 = 20000000
 fix16_t fix16_mul(fix16_t inArg0, fix16_t inArg1) {
-    int64_t product = (int64_t)inArg0 * inArg1;
-
-    fix16_t result = product >> 15;
-    result += (product & 0x4000) >> 14;
-
+    const int64_t product = (int64_t)inArg0 * inArg1;
+    fix16_t result = product >> 25;
+    // Handle rounding where we are choppping off low order bits
+    // Disabled for now, too much load. We get crackling when adjusting
+    // the volume.
+    #if 0
+    if (product & 0x4000) {
+        if (result >= 0) {
+            result++;
+        }
+        else {
+            result--;
+        }
+    }
+    #endif
     return result;
 }
+#endif
