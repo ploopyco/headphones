@@ -2,3 +2,4 @@
 inc/
 lib/
 build/
+version.h
