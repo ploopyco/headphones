@@ -109,7 +109,7 @@ typedef struct _audio_device_config {
 } audio_device_config;
 
 typedef struct _preprocessing_config {
-    fix16_t preamp;
+    fix3_28_t preamp;
     int reverse_stereo;
 } preprocessing_config;
 

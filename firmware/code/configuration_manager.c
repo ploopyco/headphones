@@ -179,12 +179,12 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
                 uint32_t checksum = 0;
                 for (int i = 0; i < sizeof(filter6) / 4; i++) checksum ^= ((uint32_t*) args)[i];
                 if (checksum != bqf_filter_checksum[filter_stages]) {
-                    bqf_filters_left[filter_stages].a0 = fix16_from_dbl(1.0);
-                    bqf_filters_left[filter_stages].a1 = fix16_from_dbl(args->a1/args->a0);
-                    bqf_filters_left[filter_stages].a2 = fix16_from_dbl(args->a2/args->a0);
-                    bqf_filters_left[filter_stages].b0 = fix16_from_dbl(args->b0/args->a0);
-                    bqf_filters_left[filter_stages].b1 = fix16_from_dbl(args->b1/args->a0);
-                    bqf_filters_left[filter_stages].b2 = fix16_from_dbl(args->b2/args->a0);
+                    bqf_filters_left[filter_stages].a0 = fix3_28_from_dbl(1.0);
+                    bqf_filters_left[filter_stages].a1 = fix3_28_from_dbl(args->a1/args->a0);
+                    bqf_filters_left[filter_stages].a2 = fix3_28_from_dbl(args->a2/args->a0);
+                    bqf_filters_left[filter_stages].b0 = fix3_28_from_dbl(args->b0/args->a0);
+                    bqf_filters_left[filter_stages].b1 = fix3_28_from_dbl(args->b1/args->a0);
+                    bqf_filters_left[filter_stages].b2 = fix3_28_from_dbl(args->b2/args->a0);
                     memcpy(&bqf_filters_right[filter_stages], &bqf_filters_left[filter_stages], sizeof(bqf_coeff_t));
                     bqf_filter_checksum[filter_stages] = checksum;
                 }
@@ -198,8 +198,8 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
         if (type_changed) {
             // The memory structure stores the last 2 input samples, we can replay them into
             // the new filter rather than starting again from scratch.
-            fix16_t left[2] = { bqf_filters_mem_left[filter_stages].x_2, bqf_filters_mem_left[filter_stages].x_1 };
-            fix16_t right[2] = { bqf_filters_mem_right[filter_stages].x_2, bqf_filters_mem_right[filter_stages].x_1 };
+            fix3_28_t left[2] = { bqf_filters_mem_left[filter_stages].x_2, bqf_filters_mem_left[filter_stages].x_1 };
+            fix3_28_t right[2] = { bqf_filters_mem_right[filter_stages].x_2, bqf_filters_mem_right[filter_stages].x_1 };
 
             bqf_memreset(&bqf_filters_mem_left[filter_stages]);
             bqf_memreset(&bqf_filters_mem_right[filter_stages]);
@@ -305,7 +305,7 @@ bool apply_configuration(tlv_header *config) {
 #ifndef TEST_TARGET
             case PREPROCESSING_CONFIGURATION: {
                 preprocessing_configuration_tlv* preprocessing_config = (preprocessing_configuration_tlv*) tlv;
-                preprocessing.preamp = fix16_from_dbl(1.0 + preprocessing_config->preamp);
+                preprocessing.preamp = fix3_28_from_dbl(1.0 + preprocessing_config->preamp);
                 preprocessing.reverse_stereo = preprocessing_config->reverse_stereo;
                 break;
             }

@@ -73,12 +73,12 @@ void bqf_lowpass_config(double fs, double f0, double Q, bqf_coeff_t *coefficient
     a2 = a2 / a0;
     a0 = 1.0;
 
-    coefficients->b0 = fix16_from_dbl(b0);
-    coefficients->b1 = fix16_from_dbl(b1);
-    coefficients->b2 = fix16_from_dbl(b2);
-    coefficients->a0 = fix16_from_dbl(a0);
-    coefficients->a1 = fix16_from_dbl(a1);
-    coefficients->a2 = fix16_from_dbl(a2);
+    coefficients->b0 = fix3_28_from_dbl(b0);
+    coefficients->b1 = fix3_28_from_dbl(b1);
+    coefficients->b2 = fix3_28_from_dbl(b2);
+    coefficients->a0 = fix3_28_from_dbl(a0);
+    coefficients->a1 = fix3_28_from_dbl(a1);
+    coefficients->a2 = fix3_28_from_dbl(a2);
 }
 
 /**
@@ -123,12 +123,12 @@ void bqf_highpass_config(double fs, double f0, double Q, bqf_coeff_t *coefficien
     a2 = a2 / a0;
     a0 = 1.0;
 
-    coefficients->b0 = fix16_from_dbl(b0);
-    coefficients->b1 = fix16_from_dbl(b1);
-    coefficients->b2 = fix16_from_dbl(b2);
-    coefficients->a0 = fix16_from_dbl(a0);
-    coefficients->a1 = fix16_from_dbl(a1);
-    coefficients->a2 = fix16_from_dbl(a2);
+    coefficients->b0 = fix3_28_from_dbl(b0);
+    coefficients->b1 = fix3_28_from_dbl(b1);
+    coefficients->b2 = fix3_28_from_dbl(b2);
+    coefficients->a0 = fix3_28_from_dbl(a0);
+    coefficients->a1 = fix3_28_from_dbl(a1);
+    coefficients->a2 = fix3_28_from_dbl(a2);
 }
 
 /**
@@ -168,12 +168,12 @@ void bqf_bandpass_skirt_config(double fs, double f0, double Q, bqf_coeff_t *coef
     a2 = a2 / a0;
     a0 = 1.0;
 
-    coefficients->b0 = fix16_from_dbl(b0);
-    coefficients->b1 = fix16_from_dbl(b1);
-    coefficients->b2 = fix16_from_dbl(b2);
-    coefficients->a0 = fix16_from_dbl(a0);
-    coefficients->a1 = fix16_from_dbl(a1);
-    coefficients->a2 = fix16_from_dbl(a2);
+    coefficients->b0 = fix3_28_from_dbl(b0);
+    coefficients->b1 = fix3_28_from_dbl(b1);
+    coefficients->b2 = fix3_28_from_dbl(b2);
+    coefficients->a0 = fix3_28_from_dbl(a0);
+    coefficients->a1 = fix3_28_from_dbl(a1);
+    coefficients->a2 = fix3_28_from_dbl(a2);
 }
 
 /**
@@ -213,12 +213,12 @@ void bqf_bandpass_peak_config(double fs, double f0, double Q, bqf_coeff_t *coeff
     a2 = a2 / a0;
     a0 = 1.0;
 
-    coefficients->b0 = fix16_from_dbl(b0);
-    coefficients->b1 = fix16_from_dbl(b1);
-    coefficients->b2 = fix16_from_dbl(b2);
-    coefficients->a0 = fix16_from_dbl(a0);
-    coefficients->a1 = fix16_from_dbl(a1);
-    coefficients->a2 = fix16_from_dbl(a2);
+    coefficients->b0 = fix3_28_from_dbl(b0);
+    coefficients->b1 = fix3_28_from_dbl(b1);
+    coefficients->b2 = fix3_28_from_dbl(b2);
+    coefficients->a0 = fix3_28_from_dbl(a0);
+    coefficients->a1 = fix3_28_from_dbl(a1);
+    coefficients->a2 = fix3_28_from_dbl(a2);
 }
 
 /**
@@ -257,12 +257,12 @@ void bqf_notch_config(double fs, double f0, double Q, bqf_coeff_t *coefficients)
     a2 = a2 / a0;
     a0 = 1.0;
 
-    coefficients->b0 = fix16_from_dbl(b0);
-    coefficients->b1 = fix16_from_dbl(b1);
-    coefficients->b2 = fix16_from_dbl(b2);
-    coefficients->a0 = fix16_from_dbl(a0);
-    coefficients->a1 = fix16_from_dbl(a1);
-    coefficients->a2 = fix16_from_dbl(a2);
+    coefficients->b0 = fix3_28_from_dbl(b0);
+    coefficients->b1 = fix3_28_from_dbl(b1);
+    coefficients->b2 = fix3_28_from_dbl(b2);
+    coefficients->a0 = fix3_28_from_dbl(a0);
+    coefficients->a1 = fix3_28_from_dbl(a1);
+    coefficients->a2 = fix3_28_from_dbl(a2);
 }
 
 /**
@@ -300,12 +300,12 @@ void bqf_allpass_config(double fs, double f0, double Q, bqf_coeff_t *coefficient
     a2 = a2 / a0;
     a0 = 1.0;
 
-    coefficients->b0 = fix16_from_dbl(b0);
-    coefficients->b1 = fix16_from_dbl(b1);
-    coefficients->b2 = fix16_from_dbl(b2);
-    coefficients->a0 = fix16_from_dbl(a0);
-    coefficients->a1 = fix16_from_dbl(a1);
-    coefficients->a2 = fix16_from_dbl(a2);
+    coefficients->b0 = fix3_28_from_dbl(b0);
+    coefficients->b1 = fix3_28_from_dbl(b1);
+    coefficients->b2 = fix3_28_from_dbl(b2);
+    coefficients->a0 = fix3_28_from_dbl(a0);
+    coefficients->a1 = fix3_28_from_dbl(a1);
+    coefficients->a2 = fix3_28_from_dbl(a2);
 }
 
 /**
@@ -353,12 +353,12 @@ void bqf_peaking_config(double fs, double f0, double dBgain, double Q,
     a2 = a2 / a0;
     a0 = 1.0;
 
-    coefficients->b0 = fix16_from_dbl(b0);
-    coefficients->b1 = fix16_from_dbl(b1);
-    coefficients->b2 = fix16_from_dbl(b2);
-    coefficients->a0 = fix16_from_dbl(a0);
-    coefficients->a1 = fix16_from_dbl(a1);
-    coefficients->a2 = fix16_from_dbl(a2);
+    coefficients->b0 = fix3_28_from_dbl(b0);
+    coefficients->b1 = fix3_28_from_dbl(b1);
+    coefficients->b2 = fix3_28_from_dbl(b2);
+    coefficients->a0 = fix3_28_from_dbl(a0);
+    coefficients->a1 = fix3_28_from_dbl(a1);
+    coefficients->a2 = fix3_28_from_dbl(a2);
 }
 
 /**
@@ -406,12 +406,12 @@ void bqf_lowshelf_config(double fs, double f0, double dBgain, double Q,
     a2 = a2 / a0;
     a0 = 1.0;
 
-    coefficients->b0 = fix16_from_dbl(b0);
-    coefficients->b1 = fix16_from_dbl(b1);
-    coefficients->b2 = fix16_from_dbl(b2);
-    coefficients->a0 = fix16_from_dbl(a0);
-    coefficients->a1 = fix16_from_dbl(a1);
-    coefficients->a2 = fix16_from_dbl(a2);
+    coefficients->b0 = fix3_28_from_dbl(b0);
+    coefficients->b1 = fix3_28_from_dbl(b1);
+    coefficients->b2 = fix3_28_from_dbl(b2);
+    coefficients->a0 = fix3_28_from_dbl(a0);
+    coefficients->a1 = fix3_28_from_dbl(a1);
+    coefficients->a2 = fix3_28_from_dbl(a2);
 }
 
 /**
@@ -459,16 +459,16 @@ void bqf_highshelf_config(double fs, double f0, double dBgain, double Q,
     a2 = a2 / a0;
     a0 = 1.0;
 
-    coefficients->b0 = fix16_from_dbl(b0);
-    coefficients->b1 = fix16_from_dbl(b1);
-    coefficients->b2 = fix16_from_dbl(b2);
-    coefficients->a0 = fix16_from_dbl(a0);
-    coefficients->a1 = fix16_from_dbl(a1);
-    coefficients->a2 = fix16_from_dbl(a2);
+    coefficients->b0 = fix3_28_from_dbl(b0);
+    coefficients->b1 = fix3_28_from_dbl(b1);
+    coefficients->b2 = fix3_28_from_dbl(b2);
+    coefficients->a0 = fix3_28_from_dbl(a0);
+    coefficients->a1 = fix3_28_from_dbl(a1);
+    coefficients->a2 = fix3_28_from_dbl(a2);
 }
 
-fix16_t bqf_transform(fix16_t x, bqf_coeff_t *coefficients, bqf_mem_t *memory) {
-    fix16_t y = fix16_mul(coefficients->b0, x) -
+fix3_28_t bqf_transform(fix3_28_t x, bqf_coeff_t *coefficients, bqf_mem_t *memory) {
+    fix3_28_t y = fix16_mul(coefficients->b0, x) -
             fix16_mul(coefficients->a1, memory->y_1) +
             fix16_mul(coefficients->b1, memory->x_1) -
             fix16_mul(coefficients->a2, memory->y_2) +

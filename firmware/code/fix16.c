@@ -60,17 +60,36 @@ fix16_t fix16_mul(fix16_t inArg0, fix16_t inArg1) {
     return inArg0 * inArg1;
 }
 #else
-fix16_t fix16_from_s16sample(int16_t a) {
-    return a * fix16_lsb;
+
+/// @brief Produces a fixed point number from a 16-bit signed integer, normalized to ]-1,1[.
+/// @param a Signed 16-bit integer.
+/// @return A fixed point number in Q3.28 format, with input normalized to ]-1,1[.
+fix3_28_t norm_fix3_28_from_s16sample(int16_t a) {
+    /* So, we're using a Q3.28 fixed point system here, and we want the incoming
+       audio signal to be represented as a number between -1 and 1. To do this,
+       we need the 16-bit value to map to the 28-bit right-of-decimal field in
+       our fixed point number. 28-16 = 12, so we shift the incoming value by
+       that much to covert it to the desired Q3.28 format and do the normalization
+       all in one go.
+    */
+    return (fix3_28_t)a << 12;
 }
 
-int16_t fix16_to_s16sample(fix16_t a) {
+/// @brief Convert fixed point samples into signed integer. Used to convert
+///        calculated sample to one that the DAC can understand.
+/// @param a
+/// @return Signed 16-bit integer.
+int16_t norm_fix3_28_to_s16sample(fix3_28_t a) {
     // Handle rounding up front, adding one can cause an overflow/underflow
+
+    // It's not clear exactly how this works, so we'll disable it for now.
+    /*
     if (a < 0) {
         a -= (fix16_lsb >> 1);
     } else {
         a += (fix16_lsb >> 1);
     }
+    */
 
     // Saturate the value if an overflow has occurred
     uint32_t upper = (a >> 30);
@@ -85,25 +104,31 @@ int16_t fix16_to_s16sample(fix16_t a) {
             return SHRT_MAX;
         }
     }
-    return (a >> 15);
+    /* When we converted the USB audio sample to a fixed point number, we applied
+       a normalization, or a gain of 1/65536. To convert it back, we can undo that
+       by shifting it back by the same amount we shifted it in the first place. */
+    return (a >> 12);
 }
 
-fix16_t fix16_from_dbl(double a) {
+
+fix3_28_t fix3_28_from_dbl(double a) {
     double temp = a * fix16_one;
     temp += (double)((temp >= 0) ? 0.5f : -0.5f);
-    return (fix16_t)temp;
+    return (fix3_28_t)temp;
 }
 
-double fix16_to_dbl(fix16_t a) {
-    return (double)a / fix16_one;
-}
-
-// We work in 64bits then shift the result to get
-// the bit representing 1 back into the correct position.
-// i.e. 1*1 == 1, so 20000000^2 >> 25 = 20000000
-fix16_t fix16_mul(fix16_t inArg0, fix16_t inArg1) {
+/// @brief Multiplies two fixed point numbers in Q3.28 format together.
+/// @param inArg0 Q3.28 format fixed point number.
+/// @param inArg1 Q3.28 format fixed point number.
+/// @return A Q3.28 fixed point number that represents the truncated result of inArg0 x inArg1.
+fix3_28_t fix16_mul(fix3_28_t inArg0, fix3_28_t inArg1) {
     const int64_t product = (int64_t)inArg0 * inArg1;
-    fix16_t result = product >> 25;
+
+    /* Since we're expecting 2 Q3.28 numbers, the multiplication result should be a Q7.56 number.
+       To bring this number back to the right order of magnitude, we need to shift
+       it to the right by 28. */
+    fix3_28_t result = product >> 28;
+
     // Handle rounding where we are choppping off low order bits
     // Disabled for now, too much load. We get crackling when adjusting
     // the volume.

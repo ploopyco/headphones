@@ -143,12 +143,12 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     for (int j = 0; j < filter_stages; j++) {
         // Left channel filter
         for (int i = 0; i < samples; i += 2) {
-            fix16_t x_f16 = fix16_mul(fix16_from_s16sample((int16_t) out[i]), preprocessing.preamp);
+            fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
 
             x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
                 &bqf_filters_mem_left[j]);
 
-            out[i] = (int32_t) fix16_to_s16sample(x_f16);
+            out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
         }
     }
 
@@ -189,12 +189,12 @@ void core1_entry() {
 
         for (int j = 0; j < filter_stages; j++) {
             for (int i = 1; i < samples; i += 2) {
-                fix16_t x_f16 = fix16_mul(fix16_from_s16sample((int16_t) out[i]), preprocessing.preamp);
+                fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
 
                 x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
                     &bqf_filters_mem_right[j]);
 
-                out[i] = (int16_t) fix16_to_s16sample(x_f16);
+                out[i] = (int16_t) norm_fix3_28_to_s16sample(x_f16);
             }
         }
 
@@ -773,8 +773,8 @@ static bool do_set_current(struct usb_setup_packet *setup) {
 }
 
 static void _tf_send_control_in_ack(__unused struct usb_endpoint *endpoint, __unused struct usb_transfer *transfer) {
-    assert(endpoint == &usb_control_in);
-    assert(transfer == &_control_in_transfer);
+    //assert(endpoint == &usb_control_in);
+    //assert(transfer == &_control_in_transfer);
     usb_debug("_tf_setup_control_ack\n");
     static struct usb_transfer _control_out_transfer;
     usb_start_empty_transfer(usb_get_control_out_endpoint(), &_control_out_transfer, 0);

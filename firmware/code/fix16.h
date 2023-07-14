@@ -32,24 +32,29 @@ typedef double fix16_t;
 static const fix16_t fix16_zero = 0;
 static const fix16_t fix16_one = 1;
 #else
-// We normalize all values into the range -32..32 with 1 extra bit for overflows
-// and one bit for the sign. We allow fixed point values to overflow, but they
-// are clipped at the point they are written back to a s16sample.
-//
-// The reason for normalizing the samples is because the filter coefficients are
-// small (usually well within in the range -32..32), by normalizing everything the coefficients
-// get lots of additional bits of precision.
-typedef int32_t fix16_t;
-static const fix16_t fix16_lsb = 0x8000;
-static const fix16_t fix16_one = 0x002000000;
-static const fix16_t fix16_zero = 0x00000000;
+
+/// @brief Fixed point math type, in format Q3.28. One sign bit, 3 bits for left-of-decimal
+///and 28 for right-of-decimal. This arrangment works because we normalize the incoming USB
+///audio data to ]-1,1[ before operating on it, to push as much of the precision in the signal
+///to the right of the decimal as possible.
+typedef int32_t fix3_28_t;
+
+/// @brief Represents the number 1 in Q3.28. There are 3 bits and a sign bit to the left of the
+///decimal, so 1.0000 would be represented as 0b 0001 followed by 28 zeros.
+static const fix3_28_t fix16_one =    0x10000000;
+
+/// @brief Represents zero in fixed point world.
+static const fix3_28_t fix16_zero = 0x00000000;
+
 #endif
 
-fix16_t fix16_from_s16sample(int16_t);
-int16_t fix16_to_s16sample(fix16_t);
-fix16_t fix16_from_dbl(double);
-double fix16_to_dbl(fix16_t);
 
-fix16_t fix16_mul(fix16_t, fix16_t);
+fix3_28_t norm_fix3_28_from_s16sample(int16_t);
+
+int16_t norm_fix3_28_to_s16sample(fix3_28_t);
+
+fix3_28_t fix3_28_from_dbl(double);
+
+fix3_28_t fix16_mul(fix3_28_t, fix3_28_t);
 
 #endif

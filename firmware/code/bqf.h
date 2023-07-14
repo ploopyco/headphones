@@ -26,19 +26,19 @@
 #include "fix16.h"
 
 typedef struct _bqf_coeff_t {
-    fix16_t a0;
-    fix16_t a1;
-    fix16_t a2;
-    fix16_t b0;
-    fix16_t b1;
-    fix16_t b2;
+    fix3_28_t a0;
+    fix3_28_t a1;
+    fix3_28_t a2;
+    fix3_28_t b0;
+    fix3_28_t b1;
+    fix3_28_t b2;
 } bqf_coeff_t;
 
 typedef struct _bqf_mem_t {
-    fix16_t x_1;
-    fix16_t x_2;
-    fix16_t y_1;
-    fix16_t y_2;
+    fix3_28_t x_1;
+    fix3_28_t x_2;
+    fix3_28_t y_1;
+    fix3_28_t y_2;
 } bqf_mem_t;
 
 // In reality we do not have enough CPU resource to run 8 filtering
@@ -65,7 +65,7 @@ void bqf_peaking_config(double, double, double, double, bqf_coeff_t *);
 void bqf_lowshelf_config(double, double, double, double, bqf_coeff_t *);
 void bqf_highshelf_config(double, double, double, double, bqf_coeff_t *);
 
-fix16_t bqf_transform(fix16_t, bqf_coeff_t *, bqf_mem_t *);
+fix3_28_t bqf_transform(fix3_28_t, bqf_coeff_t *, bqf_mem_t *);
 void bqf_memreset(bqf_mem_t *);
 
 #endif
