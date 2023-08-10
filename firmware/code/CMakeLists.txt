@@ -61,6 +61,8 @@ target_compile_definitions(ploopy_headphones PRIVATE
 
     # make the git hash available to the firmware
     GIT_HASH="${GIT_HASH}"
+
+    PICO_XOSC_STARTUP_DELAY_MULTIPLIER=64
 )
 
 pico_enable_stdio_usb(ploopy_headphones 0)
