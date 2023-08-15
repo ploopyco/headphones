@@ -52,13 +52,16 @@ static const default_configuration default_config = {
     .set_configuration = { SET_CONFIGURATION, sizeof(default_config) },
     .filters = {
         .filter = { FILTER_CONFIGURATION, sizeof(default_config.filters) },
-        .f1 = { PEAKING,    {0},    38,   -19,  0.9 },
-        .f2 = { LOWSHELF,   {0},    2900,   2,  0.7 },
-        .f3 = { PEAKING,    {0},    430,    3,  3.5 },
-        .f4 = { HIGHSHELF,  {0},    8400,   2,  0.7 },
-        .f5 = { PEAKING,    {0},    4800,   3,    5 }
+        .f1 = { PEAKING,    {0},    40,   -20,  1.4 },
+        .f2 = { LOWSHELF,   {0},    105,  2.5,  0.7 },
+        .f3 = { PEAKING,    {0},    450,  7,    1.8 },
+        .f4 = { PEAKING,    {0},    2100, 8,    3.0 },
+        .f5 = { PEAKING,    {0},    3500, -7.5, 2.9 },
+        .f6 = { PEAKING,    {0},    5200, 5.5,  3.0 },
+        .f7 = { PEAKING,    {0},    6400, -19,  4.0 },
+        .f8 = { PEAKING,    {0},    9000, 3.0,  2.0 }
     },
-    .preprocessing = { .header = { PREPROCESSING_CONFIGURATION, sizeof(default_config.preprocessing) }, -0.2f, false, {0} }
+    .preprocessing = { .header = { PREPROCESSING_CONFIGURATION, sizeof(default_config.preprocessing) }, -0.16f, true, {0} }
 };
 
 // Grab the last 4k page of flash for our configuration strutures.

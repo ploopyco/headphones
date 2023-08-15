@@ -134,6 +134,9 @@ typedef struct __attribute__((__packed__)) _default_configuration {
         filter3 f3;
         filter3 f4;
         filter3 f5;
+        filter3 f6;
+        filter3 f7;
+        filter3 f8;
     } filters;
     preprocessing_configuration_tlv preprocessing;
 } default_configuration;
