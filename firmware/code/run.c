@@ -123,33 +123,52 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     int16_t *in = (int16_t *) usb_buffer->data;
     int32_t *out = (int32_t *) userbuf;
     int samples = usb_buffer->data_len / 2;
-
-    if (preprocessing.reverse_stereo) {
-        for (int i = 0; i < samples; i+=2) {
-            out[i] = in[i+1];
-            out[i+1] = in[i];
-        }
-    }
-    else {
-        for (int i = 0; i < samples; i++)
-            out[i] = in[i];
-    }
  
     // Make sure core 1 is ready for us.
     multicore_fifo_pop_blocking();
     multicore_fifo_push_blocking(CORE0_READY);
+    multicore_fifo_push_blocking((uintptr_t) in);
     multicore_fifo_push_blocking(samples);
 
-    for (int j = 0; j < filter_stages; j++) {
-        // Left channel filter
-        for (int i = 0; i < samples; i += 2) {
-            fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
-
-            x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
-                &bqf_filters_mem_left[j]);
-
-            out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
+    if (filter_stages == 0) {
+        // Just preamp, reverse setero and copy to out
+        if (preprocessing.reverse_stereo) {
+            for (int i = 0; i < samples; i+=2) {
+                out[i] = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i+1]), preprocessing.preamp);
+                out[i+1] = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i]), preprocessing.preamp);
+            }
         }
+        else
+        {
+            for (int i = 0; i < samples; i++) {
+                out[i] = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i]), preprocessing.preamp);
+            }
+        }
+    }
+    else
+    {
+        // First left channel filter - reads directly from the USB buffer
+        for (int i = 0; i < samples; i += 2) {
+            fix3_28_t x_f16;
+            if (preprocessing.reverse_stereo) {
+                x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i+1]), preprocessing.preamp);
+            }
+            else
+            {
+                x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i]), preprocessing.preamp);
+            }
+            out[i] = bqf_transform(x_f16, &bqf_filters_left[0], &bqf_filters_mem_left[0]);
+        }
+        // Remaining filters, reads from the result of the previous filter
+        for (int j = 1; j < filter_stages; j++) {
+            for (int i = 0; i < samples; i += 2) {
+                out[i] = bqf_transform(out[i], &bqf_filters_left[j], &bqf_filters_mem_left[j]);
+            }
+        }
+    }
+    // Convert back from fix3_28_t to to sample
+    for (int i = 0; i < samples; i += 2) {
+        out[i] = (int32_t) norm_fix3_28_to_s16sample(out[i]);
     }
 
     // Block until core 1 has finished transforming the data
@@ -185,17 +204,38 @@ void core1_entry() {
         while (ready != CORE0_READY)
             ready = multicore_fifo_pop_blocking();
         
+        const int16_t *in = (const int16_t *) multicore_fifo_pop_blocking();
         const uint32_t samples = multicore_fifo_pop_blocking();
 
-        for (int j = 0; j < filter_stages; j++) {
+
+        if (filter_stages == 0) {
+            // Do nothing, core0 has copied the data for us
+        }
+        else
+        {
+            // First right channel filter - reads directly from the USB buffer
             for (int i = 1; i < samples; i += 2) {
-                fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
-
-                x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
-                    &bqf_filters_mem_right[j]);
-
-                out[i] = (int16_t) norm_fix3_28_to_s16sample(x_f16);
+                fix3_28_t x_f16;
+                if (preprocessing.reverse_stereo) {
+                    x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i-1]), preprocessing.preamp);
+                }
+                else
+                {
+                    x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i]), preprocessing.preamp);
+                }
+                out[i] = bqf_transform(x_f16, &bqf_filters_right[0], &bqf_filters_mem_right[0]);
             }
+            // Remaining filters, reads from the result of the previous filter
+            for (int j = 1; j < filter_stages; j++) {
+                for (int i = 1; i < samples; i += 2) {
+                    out[i] = bqf_transform(out[i], &bqf_filters_right[j],  &bqf_filters_mem_right[j]);
+                }
+            }
+        }
+
+        // Convert back to sample
+        for (int i = 1; i < samples; i += 2) {
+            out[i] = (int32_t) norm_fix3_28_to_s16sample(out[i]);
         }
 
         // Signal to core 0 that the data has all been transformed
@@ -247,7 +287,7 @@ void setup() {
     // The PCM3060 supports standard mode (100kbps) or fast mode (400kbps)
     // we run in fast mode so we dont block the core for too long while
     // updating the volume.
-    i2c_init(i2c0, 100000);
+    i2c_init(i2c0, 400000);
     gpio_set_function(PCM3060_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(PCM3060_SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(PCM3060_SDA_PIN);
