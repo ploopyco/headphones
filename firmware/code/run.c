@@ -118,7 +118,7 @@ static void update_volume()
 // PCM data into I2S data that gets shipped out to the PCM3060. It really
 // belongs with the other USB-related code due to its utter indecipherability,
 // but it's placed here to emphasize its importance.
-static void _as_audio_packet(struct usb_endpoint *ep) {
+static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint *ep) {
     struct usb_buffer *usb_buffer = usb_current_out_packet_buffer(ep);
     int16_t *in = (int16_t *) usb_buffer->data;
     int32_t *out = (int32_t *) userbuf;
@@ -147,21 +147,16 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     }
     else
     {
-        // First left channel filter - reads directly from the USB buffer
-        for (int i = 0; i < samples; i += 2) {
-            fix3_28_t x_f16;
-            if (preprocessing.reverse_stereo) {
-                x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i+1]), preprocessing.preamp);
-            }
-            else
-            {
-                x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i]), preprocessing.preamp);
-            }
-            out[i] = bqf_transform(x_f16, &bqf_filters_left[0], &bqf_filters_mem_left[0]);
+        if (preprocessing.reverse_stereo) {
+            in++;
         }
-        // Remaining filters, reads from the result of the previous filter
-        for (int j = 1; j < filter_stages; j++) {
-            for (int i = 0; i < samples; i += 2) {
+        for (int i = 0; i < samples; i += 2) {
+            // First left channel filter - reads directly from the USB buffer
+            fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i]), preprocessing.preamp);
+            out[i] = bqf_transform(x_f16, &bqf_filters_left[0], &bqf_filters_mem_left[0]);
+
+            // Remaining filters, reads from the result of the previous filter
+            for (int j = 1; j < filter_stages; j++) {
                 out[i] = bqf_transform(out[i], &bqf_filters_left[j], &bqf_filters_mem_left[j]);
             }
         }
@@ -188,7 +183,7 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     usb_packet_done(ep);
 }
 
-void core1_entry() {
+void __no_inline_not_in_flash_func(core1_entry)() {
     uint8_t *userbuf = (uint8_t *) multicore_fifo_pop_blocking();
     int32_t *out = (int32_t *) userbuf;
 
@@ -213,21 +208,16 @@ void core1_entry() {
         }
         else
         {
-            // First right channel filter - reads directly from the USB buffer
-            for (int i = 1; i < samples; i += 2) {
-                fix3_28_t x_f16;
-                if (preprocessing.reverse_stereo) {
-                    x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i-1]), preprocessing.preamp);
-                }
-                else
-                {
-                    x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i]), preprocessing.preamp);
-                }
-                out[i] = bqf_transform(x_f16, &bqf_filters_right[0], &bqf_filters_mem_right[0]);
+            if (preprocessing.reverse_stereo) {
+                in--;
             }
-            // Remaining filters, reads from the result of the previous filter
-            for (int j = 1; j < filter_stages; j++) {
-                for (int i = 1; i < samples; i += 2) {
+            for (int i = 1; i < samples; i += 2) {
+                // First right channel filter - reads directly from the USB buffer
+                fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) in[i]), preprocessing.preamp);
+                out[i] = bqf_transform(x_f16, &bqf_filters_right[0], &bqf_filters_mem_right[0]);
+
+                // Remaining filters, reads from the result of the previous filter
+                for (int j = 1; j < filter_stages; j++) {
                     out[i] = bqf_transform(out[i], &bqf_filters_right[j],  &bqf_filters_mem_right[j]);
                 }
             }
