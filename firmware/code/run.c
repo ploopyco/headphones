@@ -156,14 +156,6 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     uint32_t ready = multicore_fifo_pop_blocking();
     multicore_fifo_push_blocking(CORE0_READY);
 
-    // Update the volume if required. We do this from core1 as
-    // core0 is more heavily loaded, doing this from core0 can
-    // lead to audio crackling.
-    update_volume();
-
-    // Update filters if required
-    apply_config_changes();
-
     // keep on truckin'
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
@@ -172,6 +164,7 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
 void core1_entry() {
     uint8_t *userbuf = (uint8_t *) multicore_fifo_pop_blocking();
     int32_t *out = (int32_t *) userbuf;
+    int limit_counter = 100;
 
     // Signal that the thread has started
     multicore_fifo_push_blocking(CORE1_READY);
@@ -196,6 +189,19 @@ void core1_entry() {
 
                 out[i] = (int16_t) norm_fix3_28_to_s16sample(x_f16);
             }
+        }
+
+        // Update the volume and filter configs if required. We do this from
+        // core1 as core0 is more heavily loaded, doing this from core0 can
+        // lead to audio crackling.
+        // Use of a counter reduces the amount of crackling when changing
+        // volume.
+        if (limit_counter != 0)
+            limit_counter--;
+        else {
+            limit_counter = 100;
+            update_volume();
+            apply_config_changes();
         }
 
         // Signal to core 0 that the data has all been transformed
