@@ -43,7 +43,7 @@ typedef struct _bqf_mem_t {
 
 // In reality we do not have enough CPU resource to run 8 filtering
 // stages without some optimisation.
-#define MAX_FILTER_STAGES 8
+#define MAX_FILTER_STAGES 10
 extern int filter_stages;
 
 extern bqf_coeff_t bqf_filters_left[MAX_FILTER_STAGES];

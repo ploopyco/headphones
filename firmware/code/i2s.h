@@ -59,7 +59,7 @@ typedef struct _i2s_obj_t {
 extern i2s_obj_t i2s_write_obj;
 
 void i2s_write_init(i2s_obj_t *);
-uint i2s_stream_write(i2s_obj_t *, const uint8_t *, uint);
+uint i2s_stream_write(i2s_obj_t *, const uint32_t *, uint);
 
 void dma_irq_handler(uint8_t);
 void dma_irq_write_handler(void);
@@ -68,6 +68,6 @@ void dma_configure(i2s_obj_t *);
 uint8_t *dma_get_buffer(i2s_obj_t *, uint);
 void feed_dma(i2s_obj_t *, uint8_t *);
 
-uint32_t copy_userbuf_to_ringbuf(i2s_obj_t *, const uint8_t *, uint);
+uint32_t copy_userbuf_to_ringbuf(i2s_obj_t *, const uint32_t *, uint);
 
 #endif

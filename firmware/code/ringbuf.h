@@ -28,15 +28,15 @@
 #include "pico/stdlib.h"
 
 typedef struct _ring_buf_t {
-    uint8_t *buffer;
+    uint32_t *buffer;
     size_t head;
     size_t tail;
     size_t size;
 } ring_buf_t;
 
-void ringbuf_init(ring_buf_t *, uint8_t *, size_t);
-bool ringbuf_push(ring_buf_t *, uint8_t );
-bool ringbuf_pop(ring_buf_t *, uint8_t *);
+void ringbuf_init(ring_buf_t *, uint32_t *, size_t);
+bool ringbuf_push(ring_buf_t *, uint32_t );
+bool ringbuf_pop(ring_buf_t *, uint32_t *);
 bool ringbuf_is_empty(ring_buf_t *);
 bool ringbuf_is_full(ring_buf_t *);
 size_t ringbuf_available_data(ring_buf_t *);

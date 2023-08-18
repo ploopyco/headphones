@@ -25,46 +25,10 @@
 #include <limits.h>
 #include "fix16.h"
 
-#ifdef USE_DOUBLE
-fix16_t fix16_from_s16sample(int16_t a) {
-    return a;
-}
-
-int16_t fix16_to_s16sample(fix16_t a) {
-    // Handle rounding up front, adding one can cause an overflow/underflow
-    if (a < 0) {
-        a -= 0.5;
-    } else {
-        a += 0.5;
-    }
-
-    // Saturate the value if an overflow has occurred
-    if (a < SHRT_MIN) {
-        return SHRT_MIN;
-    }
-    if (a < SHRT_MAX) {
-        return SHRT_MAX;
-    }
-    return a;
-}
-
-fix16_t fix16_from_dbl(double a) {
-    return a;
-}
-
-double fix16_to_dbl(fix16_t a) {
-    return a;
-}
-
-fix16_t fix16_mul(fix16_t inArg0, fix16_t inArg1) {
-    return inArg0 * inArg1;
-}
-#else
-
 /// @brief Produces a fixed point number from a 16-bit signed integer, normalized to ]-1,1[.
 /// @param a Signed 16-bit integer.
 /// @return A fixed point number in Q3.28 format, with input normalized to ]-1,1[.
-fix3_28_t norm_fix3_28_from_s16sample(int16_t a) {
+static inline fix3_28_t norm_fix3_28_from_s16sample(int16_t a) {
     /* So, we're using a Q3.28 fixed point system here, and we want the incoming
        audio signal to be represented as a number between -1 and 1. To do this,
        we need the 16-bit value to map to the 28-bit right-of-decimal field in
@@ -79,7 +43,7 @@ fix3_28_t norm_fix3_28_from_s16sample(int16_t a) {
 ///        calculated sample to one that the DAC can understand.
 /// @param a
 /// @return Signed 16-bit integer.
-int16_t norm_fix3_28_to_s16sample(fix3_28_t a) {
+static inline int16_t norm_fix3_28_to_s16sample(fix3_28_t a) {
     // Handle rounding up front, adding one can cause an overflow/underflow
 
     // It's not clear exactly how this works, so we'll disable it for now.
@@ -110,8 +74,7 @@ int16_t norm_fix3_28_to_s16sample(fix3_28_t a) {
     return (a >> 12);
 }
 
-
-fix3_28_t fix3_28_from_dbl(double a) {
+static inline fix3_28_t fix3_28_from_dbl(double a) {
     double temp = a * fix16_one;
     temp += (double)((temp >= 0) ? 0.5f : -0.5f);
     return (fix3_28_t)temp;
@@ -121,7 +84,7 @@ fix3_28_t fix3_28_from_dbl(double a) {
 /// @param inArg0 Q3.28 format fixed point number.
 /// @param inArg1 Q3.28 format fixed point number.
 /// @return A Q3.28 fixed point number that represents the truncated result of inArg0 x inArg1.
-fix3_28_t fix16_mul(fix3_28_t inArg0, fix3_28_t inArg1) {
+static inline fix3_28_t fix16_mul(fix3_28_t inArg0, fix3_28_t inArg1) {
     const int64_t product = (int64_t)inArg0 * inArg1;
 
     /* Since we're expecting 2 Q3.28 numbers, the multiplication result should be a Q7.56 number.
@@ -144,4 +107,3 @@ fix3_28_t fix16_mul(fix3_28_t inArg0, fix3_28_t inArg1) {
     #endif
     return result;
 }
-#endif

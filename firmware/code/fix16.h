@@ -25,13 +25,6 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
-// During development, it can be useful to run with real double values for reference.
-//#define USE_DOUBLE
-#ifdef USE_DOUBLE
-typedef double fix16_t;
-static const fix16_t fix16_zero = 0;
-static const fix16_t fix16_one = 1;
-#else
 
 /// @brief Fixed point math type, in format Q3.28. One sign bit, 3 bits for left-of-decimal
 ///and 28 for right-of-decimal. This arrangment works because we normalize the incoming USB
@@ -46,15 +39,13 @@ static const fix3_28_t fix16_one =    0x10000000;
 /// @brief Represents zero in fixed point world.
 static const fix3_28_t fix16_zero = 0x00000000;
 
-#endif
+static inline fix3_28_t norm_fix3_28_from_s16sample(int16_t);
 
+static inline int16_t norm_fix3_28_to_s16sample(fix3_28_t);
 
-fix3_28_t norm_fix3_28_from_s16sample(int16_t);
+static inline fix3_28_t fix3_28_from_dbl(double);
 
-int16_t norm_fix3_28_to_s16sample(fix3_28_t);
+static inline fix3_28_t fix16_mul(fix3_28_t, fix3_28_t);
 
-fix3_28_t fix3_28_from_dbl(double);
-
-fix3_28_t fix16_mul(fix3_28_t, fix3_28_t);
-
+#include "fix16.inl"
 #endif
