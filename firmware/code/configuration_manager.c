@@ -74,7 +74,7 @@ const uint8_t *user_configuration = (const uint8_t *) (XIP_BASE + USER_CONFIGURA
  * should handle merging configurations where, for example, only a new
  * filter_configuration_tlv was received.
  */
-#define CFG_BUFFER_SIZE 256
+#define CFG_BUFFER_SIZE 512
 static uint8_t working_configuration[2][CFG_BUFFER_SIZE];
 static uint8_t inactive_working_configuration = 0;
 static uint8_t result_buffer[CFG_BUFFER_SIZE] = { U16_TO_U8S_LE(NOK), U16_TO_U8S_LE(0) };

@@ -65,7 +65,8 @@ void bqf_peaking_config(double, double, double, double, bqf_coeff_t *);
 void bqf_lowshelf_config(double, double, double, double, bqf_coeff_t *);
 void bqf_highshelf_config(double, double, double, double, bqf_coeff_t *);
 
-fix3_28_t bqf_transform(fix3_28_t, bqf_coeff_t *, bqf_mem_t *);
+static inline fix3_28_t bqf_transform(fix3_28_t, bqf_coeff_t *, bqf_mem_t *);
 void bqf_memreset(bqf_mem_t *);
 
+#include "bqf.inl"
 #endif

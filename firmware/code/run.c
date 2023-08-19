@@ -133,8 +133,9 @@ static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint 
         }
     }
     else {
-        for (int i = 0; i < samples; i++)
+        for (int i = 0; i < samples; i++) {
             out[i] = fix16_mul(norm_fix3_28_from_s16sample(in[i]), preprocessing.preamp);
+        }
     }
 
     multicore_fifo_push_blocking(samples);
