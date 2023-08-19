@@ -124,27 +124,21 @@ static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint 
     int32_t *out = (int32_t *) userbuf;
     int samples = usb_buffer->data_len / 2;
 
-    // TODO: For some reason if we try to process in from both cores the left and right channels
-    // flip back and forth..
+    multicore_fifo_push_blocking(samples);
     if (preprocessing.reverse_stereo) {
-        for (int i = 0; i < samples; i+=2) {
-            out[i] = fix16_mul(norm_fix3_28_from_s16sample(in[i+1]), preprocessing.preamp);
-            out[i+1] = fix16_mul(norm_fix3_28_from_s16sample(in[i]), preprocessing.preamp);
-        }
+        multicore_fifo_push_blocking((uintptr_t) (in - 1));
+        in ++;
     }
     else {
-        for (int i = 0; i < samples; i++) {
-            out[i] = fix16_mul(norm_fix3_28_from_s16sample(in[i]), preprocessing.preamp);
-        }
+        multicore_fifo_push_blocking((uintptr_t) in);
     }
 
-    multicore_fifo_push_blocking(samples);
-
     for (int i = 0; i < samples; i += 2) {
+        fix3_28_t sample = fix16_mul(norm_fix3_28_from_s16sample(in[i]), preprocessing.preamp);
         for (int j = 0; j < filter_stages; j++) {
-            out[i] = bqf_transform(out[i], &bqf_filters_left[j], &bqf_filters_mem_left[j]);
+            sample = bqf_transform(sample, &bqf_filters_left[j], &bqf_filters_mem_left[j]);
         }
-        out[i] = (int32_t) norm_fix3_28_to_s16sample(out[i]);
+        out[i] = (int32_t) norm_fix3_28_to_s16sample(sample);
     }
 
     // Signal to core 1 that we have processed our samples, so it can write to I2S
@@ -167,12 +161,14 @@ void __no_inline_not_in_flash_func(core1_entry)() {
 
     while (true) {
         const uint32_t samples = multicore_fifo_pop_blocking();
+        int16_t *in = (int16_t *) multicore_fifo_pop_blocking();
 
         for (int i = 1; i < samples; i += 2) {
+            fix3_28_t sample = fix16_mul(norm_fix3_28_from_s16sample(in[i]), preprocessing.preamp);
             for (int j = 0; j < filter_stages; j++) {
-                out[i] = bqf_transform(out[i], &bqf_filters_right[j], &bqf_filters_mem_right[j]);
+                sample = bqf_transform(sample, &bqf_filters_right[j], &bqf_filters_mem_right[j]);
             }
-            out[i] = (int32_t) norm_fix3_28_to_s16sample(out[i]);
+            out[i] = (int32_t) norm_fix3_28_to_s16sample(sample);
         }
 
         // Wait for Core 0 to finish running its filtering before we apply config updates
@@ -180,6 +176,8 @@ void __no_inline_not_in_flash_func(core1_entry)() {
         i2s_stream_write(&i2s_write_obj, userbuf, samples);
     }
 }
+
+static const audio_device_config ad_conf;
 
 void setup() {
     set_sys_clock_khz(SYSTEM_FREQ / 1000, true);
@@ -193,7 +191,7 @@ void setup() {
 
     pico_get_unique_board_id_string(spi_serial_number, 17);
     descriptor_strings[2] = spi_serial_number;
-    userbuf = malloc(sizeof(uint8_t) * RINGBUF_LEN_IN_BYTES);
+    userbuf = malloc(2 * ad_conf.ep1.core.wMaxPacketSize);
     
     // Configure DAC PWM
     gpio_set_function(PCM3060_SCKI2_PIN, GPIO_FUNC_PWM);
