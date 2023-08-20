@@ -128,6 +128,10 @@ static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint 
         out[i] = fix16_mul(norm_fix3_28_from_s16sample(in[i]), preprocessing.preamp);
     }
 
+    // keep on truckin'
+    usb_grow_transfer(ep->current_transfer, 1);
+    usb_packet_done(ep);
+
     multicore_fifo_push_blocking(samples);
     if (preprocessing.reverse_stereo) {
         multicore_fifo_push_blocking((uintptr_t) (out - 1));
@@ -149,10 +153,6 @@ static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint 
 
     update_volume();
     apply_config_changes();
-
-    // keep on truckin'
-    usb_grow_transfer(ep->current_transfer, 1);
-    usb_packet_done(ep);
 }
 
 void __no_inline_not_in_flash_func(core1_entry)() {
