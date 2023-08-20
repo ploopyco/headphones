@@ -192,7 +192,7 @@ void setup() {
 
     pico_get_unique_board_id_string(spi_serial_number, 17);
     descriptor_strings[2] = spi_serial_number;
-    userbuf = malloc(2 * ad_conf.ep1.core.wMaxPacketSize);
+    userbuf = malloc(sizeof(uint8_t) * RINGBUF_LEN_IN_BYTES);
     
     // Configure DAC PWM
     gpio_set_function(PCM3060_SCKI2_PIN, GPIO_FUNC_PWM);
