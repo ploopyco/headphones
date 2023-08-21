@@ -64,7 +64,7 @@ void i2s_write_init(i2s_obj_t *self) {
             self->prog_offset + self->pio_program->length - 1);
     pio_sm_set_config(self->pio, self->sm, &config);
 
-    uint32_t *rbs = malloc(sizeof(uint8_t) * RINGBUF_LEN_IN_BYTES);
+    uint8_t *rbs = malloc(sizeof(uint8_t) * RINGBUF_LEN_IN_BYTES);
     ringbuf_init(&self->ring_buffer, rbs, RINGBUF_LEN_IN_BYTES);
 
     irq_set_exclusive_handler(DMA_IRQ_1, dma_irq_write_handler);
@@ -169,27 +169,27 @@ uint8_t *dma_get_buffer(i2s_obj_t *i2s_obj, uint channel) {
 void feed_dma(i2s_obj_t *self, uint8_t *dma_buffer_p) {
     // when data exists, copy samples from ring buffer
     if (ringbuf_available_data(&self->ring_buffer) >= SIZEOF_HALF_DMA_BUFFER_IN_BYTES) {
-        for (uint32_t i = 0; i < SIZEOF_HALF_DMA_BUFFER_IN_BYTES; i+=4)
-            ringbuf_pop(&self->ring_buffer, (uint32_t*)&dma_buffer_p[i]);
+        for (uint32_t i = 0; i < SIZEOF_HALF_DMA_BUFFER_IN_BYTES; i++)
+            ringbuf_pop(&self->ring_buffer, &dma_buffer_p[i]);
     } else {
         // underflow.  clear buffer to transmit "silence" on the I2S bus
         memset(dma_buffer_p, 0, SIZEOF_HALF_DMA_BUFFER_IN_BYTES);
     }
 }
 
-uint i2s_stream_write(i2s_obj_t *self, const uint32_t *buf_out, uint size) {
+uint i2s_stream_write(i2s_obj_t *self, const uint8_t *buf_out, uint size) {
     if (size == 0) {
         //printf("ERROR: buffer can't be length zero");
         exit(1);
     }
 
-    uint32_t num_words_written = copy_userbuf_to_ringbuf(self, buf_out, size);
-    return num_words_written;
+    uint32_t num_bytes_written = copy_userbuf_to_ringbuf(self, buf_out, size);
+    return num_bytes_written;
 }
 
 // TODO maybe we can skip every fourth byte, if we're doing this in 24-bit...
 // could save on some processing power
-uint32_t copy_userbuf_to_ringbuf(i2s_obj_t *self, const uint32_t *buf_out, uint size) {
+uint32_t copy_userbuf_to_ringbuf(i2s_obj_t *self, const uint8_t *buf_out, uint size) {
     uint32_t a_index = 0;
 
     while (a_index < size) {

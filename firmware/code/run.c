@@ -124,62 +124,89 @@ static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint 
     int32_t *out = (int32_t *) userbuf;
     int samples = usb_buffer->data_len / 2;
 
-    const fix3_28_t preamp = preprocessing.preamp;
-    for (int i = 0; i < samples; i ++) {
-        out[i] = fix16_mul(norm_fix3_28_from_s16sample(in[i]), preamp);
+    if (preprocessing.reverse_stereo) {
+        for (int i = 0; i < samples; i+=2) {
+            out[i] = in[i+1];
+            out[i+1] = in[i];
+        }
     }
+    else {
+        for (int i = 0; i < samples; i++)
+            out[i] = in[i];
+    }
+ 
+    // Make sure core 1 is ready for us.
+    multicore_fifo_pop_blocking();
+    multicore_fifo_push_blocking(CORE0_READY);
+    multicore_fifo_push_blocking(samples);
+
+    for (int j = 0; j < filter_stages; j++) {
+        // Left channel filter
+        for (int i = 0; i < samples; i += 2) {
+            fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
+
+            x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
+                &bqf_filters_mem_left[j]);
+
+            out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
+        }
+    }
+
+    // Block until core 1 has finished transforming the data
+    uint32_t ready = multicore_fifo_pop_blocking();
+    multicore_fifo_push_blocking(CORE0_READY);
+
+    // Update the volume if required. We do this from core1 as
+    // core0 is more heavily loaded, doing this from core0 can
+    // lead to audio crackling.
+    update_volume();
+
+    // Update filters if required
+    apply_config_changes();
 
     // keep on truckin'
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
-
-    multicore_fifo_push_blocking(samples);
-    if (preprocessing.reverse_stereo) {
-        multicore_fifo_push_blocking((uintptr_t) (out - 1));
-        out ++;
-    }
-    else {
-        multicore_fifo_push_blocking((uintptr_t) out);
-    }
-
-    for (int i = 0; i < samples; i += 2) {
-        for (int j = 0; j < filter_stages; j++) {
-            out[i] = bqf_transform(out[i], &bqf_filters_left[j], &bqf_filters_mem_left[j]);
-        }
-        out[i] = (int32_t) norm_fix3_28_to_s16sample(out[i]);
-    }
-
-    // Signal to core 1 that we have processed our samples, so it can write to I2S
-    multicore_fifo_push_blocking(CORE0_READY);
-
-    update_volume();
-    apply_config_changes();
 }
 
 void __no_inline_not_in_flash_func(core1_entry)() {
-    uint32_t *userbuf = (uint32_t *) multicore_fifo_pop_blocking();
+    uint8_t *userbuf = (uint8_t *) multicore_fifo_pop_blocking();
+    int32_t *out = (int32_t *) userbuf;
 
     // Signal that the thread has started
     multicore_fifo_push_blocking(CORE1_READY);
 
     while (true) {
-        const uint32_t samples = multicore_fifo_pop_blocking();
-        int32_t *out = (int32_t *) multicore_fifo_pop_blocking();
+        // Signal to core 0 that we are ready to accept new data
+        multicore_fifo_push_blocking(CORE1_READY);
 
-        for (int i = 1; i < samples; i += 2) {
-            for (int j = 0; j < filter_stages; j++) {
-                out[i] = bqf_transform(out[i], &bqf_filters_right[j], &bqf_filters_mem_right[j]);
+        // Block until the userbuf is filled with data
+        uint32_t ready = multicore_fifo_pop_blocking();
+        while (ready != CORE0_READY)
+            ready = multicore_fifo_pop_blocking();
+        
+        const uint32_t samples = multicore_fifo_pop_blocking();
+
+        for (int j = 0; j < filter_stages; j++) {
+            for (int i = 1; i < samples; i += 2) {
+                fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
+
+                x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
+                    &bqf_filters_mem_right[j]);
+
+                out[i] = (int16_t) norm_fix3_28_to_s16sample(x_f16);
             }
-            out[i] = (int32_t) norm_fix3_28_to_s16sample(out[i]);
         }
+
+        // Signal to core 0 that the data has all been transformed
+        multicore_fifo_push_blocking(CORE1_READY);
 
         // Wait for Core 0 to finish running its filtering before we apply config updates
         multicore_fifo_pop_blocking();
-        i2s_stream_write(&i2s_write_obj, userbuf, samples);
+
+        i2s_stream_write(&i2s_write_obj, userbuf, samples * 4);
     }
 }
-
-static const audio_device_config ad_conf;
 
 void setup() {
     set_sys_clock_khz(SYSTEM_FREQ / 1000, true);

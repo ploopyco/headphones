@@ -33,14 +33,14 @@
 // - Sequential atomic operations
 // One byte of capacity is used to detect buffer empty/full
 
-void ringbuf_init(ring_buf_t *rbuf, uint32_t *buffer, size_t size) {
+void ringbuf_init(ring_buf_t *rbuf, uint8_t *buffer, size_t size) {
     rbuf->buffer = buffer;
     rbuf->size = size;
     rbuf->head = 0;
     rbuf->tail = 0;
 }
 
-bool ringbuf_push(ring_buf_t *rbuf, uint32_t data) {
+bool ringbuf_push(ring_buf_t *rbuf, uint8_t data) {
     size_t next_tail = (rbuf->tail + 1) % rbuf->size;
 
     if (next_tail != rbuf->head) {
@@ -53,7 +53,7 @@ bool ringbuf_push(ring_buf_t *rbuf, uint32_t data) {
     return false;
 }
 
-bool ringbuf_pop(ring_buf_t *rbuf, uint32_t *data) {
+bool ringbuf_pop(ring_buf_t *rbuf, uint8_t *data) {
     if (rbuf->head == rbuf->tail) {
         // empty
         return false;
