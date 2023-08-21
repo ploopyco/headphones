@@ -89,7 +89,17 @@ static inline fix3_28_t fix16_mul(fix3_28_t inArg0, fix3_28_t inArg1) {
     uint32_t B = (inArg0 & 0x3FFF), D = (inArg1 & 0x3FFF);
     int32_t AC = A*C;
     int32_t AD_CB = A*D + C*B;
-    product_hi = AC + (AD_CB >> 14);
-    // Carry not handled.
+    int32_t product_hi = AC + (AD_CB >> 14);
+
+#if HANDLE_CARRY
+	// Handle carry from lower bits to upper part of result.
+    uint32_t BD = B*D;
+	uint32_t ad_cb_temp = AD_CB << 14;
+	uint32_t product_lo = BD + ad_cb_temp;
+
+	if (product_lo < BD)
+		product_hi++;
+#endif
+
     return product_hi;
 }
