@@ -68,7 +68,7 @@ static const default_configuration default_config = {
         .f14 = { PEAKING,    {0},   6200,  -15.0,  3.0  },
         .f15 = { HIGHSHELF,  {0},  12000,   -6.0,  0.71 }
     },
-    .preprocessing = { .header = { PREPROCESSING_CONFIGURATION, sizeof(default_config.preprocessing) }, -0.06f, true, {0} }
+    .preprocessing = { .header = { PREPROCESSING_CONFIGURATION, sizeof(default_config.preprocessing) }, -0.08f, true, {0} }
 };
 
 // Grab the last 4k page of flash for our configuration strutures.
@@ -359,7 +359,7 @@ bool __no_inline_not_in_flash_func(save_configuration)() {
 
         const size_t config_length = config->length - ((size_t)config->value - (size_t)config);
         // Write data to flash
-        uint8_t flash_buffer[FLASH_PAGE_SIZE];
+        uint8_t flash_buffer[CFG_BUFFER_SIZE];
         flash_header_tlv* flash_header = (flash_header_tlv*) flash_buffer;
         flash_header->header.type = FLASH_HEADER;
         flash_header->header.length = sizeof(flash_header_tlv) + config_length;
@@ -369,7 +369,7 @@ bool __no_inline_not_in_flash_func(save_configuration)() {
 
         uint32_t ints = save_and_disable_interrupts();
         flash_range_erase(USER_CONFIGURATION_OFFSET, FLASH_SECTOR_SIZE);
-        flash_range_program(USER_CONFIGURATION_OFFSET, flash_buffer, FLASH_PAGE_SIZE);
+        flash_range_program(USER_CONFIGURATION_OFFSET, flash_buffer, CFG_BUFFER_SIZE);
         restore_interrupts(ints);
 
         power_up_dac();
