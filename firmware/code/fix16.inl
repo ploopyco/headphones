@@ -85,25 +85,11 @@ static inline fix3_28_t fix3_28_from_dbl(double a) {
 /// @param inArg1 Q3.28 format fixed point number.
 /// @return A Q3.28 fixed point number that represents the truncated result of inArg0 x inArg1.
 static inline fix3_28_t fix16_mul(fix3_28_t inArg0, fix3_28_t inArg1) {
-    const int64_t product = (int64_t)inArg0 * inArg1;
-
-    /* Since we're expecting 2 Q3.28 numbers, the multiplication result should be a Q7.56 number.
-       To bring this number back to the right order of magnitude, we need to shift
-       it to the right by 28. */
-    fix3_28_t result = product >> 28;
-
-    // Handle rounding where we are choppping off low order bits
-    // Disabled for now, too much load. We get crackling when adjusting
-    // the volume.
-    #if 0
-    if (product & 0x4000) {
-        if (result >= 0) {
-            result++;
-        }
-        else {
-            result--;
-        }
-    }
-    #endif
-    return result;
+    int32_t A = (inArg0 >> 14), C = (inArg1 >> 14);
+    uint32_t B = (inArg0 & 0x3FFF), D = (inArg1 & 0x3FFF);
+    int32_t AC = A*C;
+    int32_t AD_CB = A*D + C*B;
+    product_hi = AC + (AD_CB >> 14);
+    // Carry not handled.
+    return product_hi;
 }

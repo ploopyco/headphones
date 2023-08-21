@@ -124,8 +124,9 @@ static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint 
     int32_t *out = (int32_t *) userbuf;
     int samples = usb_buffer->data_len / 2;
 
+    const fix3_28_t preamp = preprocessing.preamp;
     for (int i = 0; i < samples; i ++) {
-        out[i] = fix16_mul(norm_fix3_28_from_s16sample(in[i]), preprocessing.preamp);
+        out[i] = fix16_mul(norm_fix3_28_from_s16sample(in[i]), preamp);
     }
 
     // keep on truckin'
