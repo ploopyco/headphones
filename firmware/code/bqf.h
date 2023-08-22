@@ -41,9 +41,9 @@ typedef struct _bqf_mem_t {
     fix3_28_t y_2;
 } bqf_mem_t;
 
-// In reality we do not have enough CPU resource to run 8 filtering
-// stages without some optimisation.
-#define MAX_FILTER_STAGES 16
+// More filters should be possible, but the config structure
+// might grow beyond the current 512 byte size.
+#define MAX_FILTER_STAGES 20
 extern int filter_stages;
 
 extern bqf_coeff_t bqf_filters_left[MAX_FILTER_STAGES];
