@@ -136,7 +136,7 @@ bool validate_filter_configuration(filter_configuration_tlv *filters)
                 printf("Error! Not enough data left for filter6 (%d)\n", remaining);
                 return false;
             }
-            if (args->a0 == 0.0) {
+            if (args->a0 == 0.0f) {
                 printf("Error! The a0 co-efficient of an IIR filter must not be 0.\n");
                 return false;
             }
@@ -189,7 +189,7 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
                 uint32_t checksum = 0;
                 for (int i = 0; i < sizeof(filter6) / 4; i++) checksum ^= ((uint32_t*) args)[i];
                 if (checksum != bqf_filter_checksum[filter_stages]) {
-                    bqf_filters_left[filter_stages].a0 = fix3_28_from_dbl(1.0);
+                    bqf_filters_left[filter_stages].a0 = fix16_one;
                     bqf_filters_left[filter_stages].a1 = fix3_28_from_dbl(args->a1/args->a0);
                     bqf_filters_left[filter_stages].a2 = fix3_28_from_dbl(args->a2/args->a0);
                     bqf_filters_left[filter_stages].b0 = fix3_28_from_dbl(args->b0/args->a0);
@@ -315,7 +315,7 @@ bool apply_configuration(tlv_header *config) {
 #ifndef TEST_TARGET
             case PREPROCESSING_CONFIGURATION: {
                 preprocessing_configuration_tlv* preprocessing_config = (preprocessing_configuration_tlv*) tlv;
-                preprocessing.preamp = fix3_28_from_dbl(1.0 + preprocessing_config->preamp);
+                preprocessing.preamp = fix3_28_from_flt(1.0f + preprocessing_config->preamp);
                 preprocessing.reverse_stereo = preprocessing_config->reverse_stereo;
                 break;
             }

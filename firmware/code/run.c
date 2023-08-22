@@ -291,6 +291,7 @@ void setup() {
  * IF YOU DO, YOU COULD BLOW UP YOUR HARDWARE!                               *
  * YOU WERE WARNED!!!!!!!!!!!!!!!!                                           *
  ****************************************************************************/
+ // TODO: roundf will be much faster than round, but it might mess with timings
 void configure_neg_switch_pwm() {
     gpio_set_function(NEG_SWITCH_PWM_PIN, GPIO_FUNC_PWM);
     uint slice_num = pwm_gpio_to_slice_num(NEG_SWITCH_PWM_PIN);

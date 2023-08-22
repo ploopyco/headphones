@@ -43,6 +43,8 @@ static inline fix3_28_t norm_fix3_28_from_s16sample(int16_t);
 
 static inline int16_t norm_fix3_28_to_s16sample(fix3_28_t);
 
+static inline fix3_28_t fix3_28_from_flt(float);
+
 static inline fix3_28_t fix3_28_from_dbl(double);
 
 static inline fix3_28_t fix16_mul(fix3_28_t, fix3_28_t);

@@ -74,6 +74,12 @@ static inline int16_t norm_fix3_28_to_s16sample(fix3_28_t a) {
     return (a >> 12);
 }
 
+static inline fix3_28_t fix3_28_from_flt(float a) {
+    float temp = a * fix16_one;
+    temp += ((temp >= 0) ? 0.5f : -0.5f);
+    return (fix3_28_t)temp;
+}
+
 static inline fix3_28_t fix3_28_from_dbl(double a) {
     double temp = a * fix16_one;
     temp += (double)((temp >= 0) ? 0.5f : -0.5f);
