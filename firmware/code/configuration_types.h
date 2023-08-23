@@ -17,8 +17,8 @@
 #include <stdint.h>
 
 #define FLASH_MAGIC 0x2E8AFEDD
-#define CONFIG_VERSION 2
-#define MINIMUM_CONFIG_VERSION 1
+#define CONFIG_VERSION 3
+#define MINIMUM_CONFIG_VERSION 3
 
 enum structure_types {
     // Commands/Responses, these are container TLVs. The Value will be a set of TLV structures.
@@ -53,18 +53,20 @@ typedef struct __attribute__((__packed__)) _tlv_header {
 typedef struct __attribute__((__packed__)) _filter2 {
     uint8_t type;
     uint8_t reserved[3];
-    double f0;
-    double Q;
+    float f0;
+    float Q;
 } filter2;
 
 typedef struct __attribute__((__packed__)) _filter3 {
     uint8_t type;
     uint8_t reserved[3];
-    double f0;
-    double db_gain;
-    double Q;
+    float f0;
+    float db_gain;
+    float Q;
 } filter3;
 
+// WARNING: We wont be able to support more than 8 of these filters
+// due to the config structure size.
 typedef struct __attribute__((__packed__)) _filter6 {
     uint8_t type;
     uint8_t reserved[3];
@@ -98,7 +100,7 @@ typedef struct __attribute__((__packed__)) _flash_header_tlv {
 
 typedef struct __attribute__((__packed__)) _preprocessing_configuration_tlv {
     tlv_header header;
-    double preamp;
+    float preamp;
     uint8_t reverse_stereo;
     uint8_t reserved[3];
 } preprocessing_configuration_tlv;
@@ -137,6 +139,13 @@ typedef struct __attribute__((__packed__)) _default_configuration {
         filter3 f6;
         filter3 f7;
         filter3 f8;
+        filter3 f9;
+        filter3 f10;
+        filter3 f11;
+        filter3 f12;
+        filter3 f13;
+        filter3 f14;
+        filter3 f15;
     } filters;
     preprocessing_configuration_tlv preprocessing;
 } default_configuration;

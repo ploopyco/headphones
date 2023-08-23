@@ -14,7 +14,6 @@ add_executable(ploopy_headphones
     run.c
     ringbuf.c
     i2s.c
-    fix16.c
     bqf.c
     configuration_manager.c
 )
@@ -63,6 +62,9 @@ target_compile_definitions(ploopy_headphones PRIVATE
     GIT_HASH="${GIT_HASH}"
 
     PICO_XOSC_STARTUP_DELAY_MULTIPLIER=64
+
+    # Performance, avoid calls to ____wrap___aeabi_lmul_veneer when doing 64bit multiplies
+    PICO_INT64_OPS_IN_RAM=1
 )
 
 pico_enable_stdio_usb(ploopy_headphones 0)

@@ -52,16 +52,23 @@ static const default_configuration default_config = {
     .set_configuration = { SET_CONFIGURATION, sizeof(default_config) },
     .filters = {
         .filter = { FILTER_CONFIGURATION, sizeof(default_config.filters) },
-        .f1 = { PEAKING,    {0},    40,   -20,  1.4 },
-        .f2 = { LOWSHELF,   {0},    105,  2.5,  0.7 },
-        .f3 = { PEAKING,    {0},    450,  7,    1.8 },
-        .f4 = { PEAKING,    {0},    2100, 8,    3.0 },
-        .f5 = { PEAKING,    {0},    3500, -7.5, 2.9 },
-        .f6 = { PEAKING,    {0},    5200, 5.5,  3.0 },
-        .f7 = { PEAKING,    {0},    6400, -19,  4.0 },
-        .f8 = { PEAKING,    {0},    9000, 3.0,  2.0 }
+        .f1  = { PEAKING,    {0},    38.5, -21.0,  1.4  },
+        .f2  = { PEAKING,    {0},    60,    -6.7,  0.5  },
+        .f3  = { LOWSHELF,   {0},    105,    5.5,  0.71 },
+        .f4  = { PEAKING,    {0},    280,   -3.5,  1.1  },
+        .f5  = { PEAKING,    {0},    350,   -1.6,  6.0  },
+        .f6  = { PEAKING,    {0},    425,    7.8,  1.3  },
+        .f7  = { PEAKING,    {0},    500,   -2.0,  7.0  },
+        .f8  = { PEAKING,    {0},    690,   -5.5,  3.0  },
+        .f9  = { PEAKING,    {0},   1000,   -2.2,  5.0  },
+        .f10 = { PEAKING,    {0},   1530,   -4.0,  2.5  },
+        .f11 = { PEAKING,    {0},   2250,    6.0,  2.0  },
+        .f12 = { PEAKING,    {0},   3430,  -12.2,  2.0  },
+        .f13 = { PEAKING,    {0},   4800,    4.0,  2.0  },
+        .f14 = { PEAKING,    {0},   6200,  -15.0,  3.0  },
+        .f15 = { HIGHSHELF,  {0},  12000,   -6.0,  0.71 }
     },
-    .preprocessing = { .header = { PREPROCESSING_CONFIGURATION, sizeof(default_config.preprocessing) }, -0.16f, true, {0} }
+    .preprocessing = { .header = { PREPROCESSING_CONFIGURATION, sizeof(default_config.preprocessing) }, -0.08f, true, {0} }
 };
 
 // Grab the last 4k page of flash for our configuration strutures.
@@ -74,7 +81,7 @@ const uint8_t *user_configuration = (const uint8_t *) (XIP_BASE + USER_CONFIGURA
  * should handle merging configurations where, for example, only a new
  * filter_configuration_tlv was received.
  */
-#define CFG_BUFFER_SIZE 256
+#define CFG_BUFFER_SIZE 512
 static uint8_t working_configuration[2][CFG_BUFFER_SIZE];
 static uint8_t inactive_working_configuration = 0;
 static uint8_t result_buffer[CFG_BUFFER_SIZE] = { U16_TO_U8S_LE(NOK), U16_TO_U8S_LE(0) };
@@ -129,7 +136,7 @@ bool validate_filter_configuration(filter_configuration_tlv *filters)
                 printf("Error! Not enough data left for filter6 (%d)\n", remaining);
                 return false;
             }
-            if (args->a0 == 0.0) {
+            if (args->a0 == 0.0f) {
                 printf("Error! The a0 co-efficient of an IIR filter must not be 0.\n");
                 return false;
             }
@@ -182,7 +189,7 @@ void apply_filter_configuration(filter_configuration_tlv *filters) {
                 uint32_t checksum = 0;
                 for (int i = 0; i < sizeof(filter6) / 4; i++) checksum ^= ((uint32_t*) args)[i];
                 if (checksum != bqf_filter_checksum[filter_stages]) {
-                    bqf_filters_left[filter_stages].a0 = fix3_28_from_dbl(1.0);
+                    bqf_filters_left[filter_stages].a0 = fix16_one;
                     bqf_filters_left[filter_stages].a1 = fix3_28_from_dbl(args->a1/args->a0);
                     bqf_filters_left[filter_stages].a2 = fix3_28_from_dbl(args->a2/args->a0);
                     bqf_filters_left[filter_stages].b0 = fix3_28_from_dbl(args->b0/args->a0);
@@ -308,7 +315,7 @@ bool apply_configuration(tlv_header *config) {
 #ifndef TEST_TARGET
             case PREPROCESSING_CONFIGURATION: {
                 preprocessing_configuration_tlv* preprocessing_config = (preprocessing_configuration_tlv*) tlv;
-                preprocessing.preamp = fix3_28_from_dbl(1.0 + preprocessing_config->preamp);
+                preprocessing.preamp = fix3_28_from_flt(1.0f + preprocessing_config->preamp);
                 preprocessing.reverse_stereo = preprocessing_config->reverse_stereo;
                 break;
             }
@@ -352,7 +359,7 @@ bool __no_inline_not_in_flash_func(save_configuration)() {
 
         const size_t config_length = config->length - ((size_t)config->value - (size_t)config);
         // Write data to flash
-        uint8_t flash_buffer[FLASH_PAGE_SIZE];
+        uint8_t flash_buffer[CFG_BUFFER_SIZE];
         flash_header_tlv* flash_header = (flash_header_tlv*) flash_buffer;
         flash_header->header.type = FLASH_HEADER;
         flash_header->header.length = sizeof(flash_header_tlv) + config_length;
@@ -362,7 +369,7 @@ bool __no_inline_not_in_flash_func(save_configuration)() {
 
         uint32_t ints = save_and_disable_interrupts();
         flash_range_erase(USER_CONFIGURATION_OFFSET, FLASH_SECTOR_SIZE);
-        flash_range_program(USER_CONFIGURATION_OFFSET, flash_buffer, FLASH_PAGE_SIZE);
+        flash_range_program(USER_CONFIGURATION_OFFSET, flash_buffer, CFG_BUFFER_SIZE);
         restore_interrupts(ints);
 
         power_up_dac();

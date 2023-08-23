@@ -118,7 +118,7 @@ static void update_volume()
 // PCM data into I2S data that gets shipped out to the PCM3060. It really
 // belongs with the other USB-related code due to its utter indecipherability,
 // but it's placed here to emphasize its importance.
-static void _as_audio_packet(struct usb_endpoint *ep) {
+static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint *ep) {
     struct usb_buffer *usb_buffer = usb_current_out_packet_buffer(ep);
     int16_t *in = (int16_t *) usb_buffer->data;
     int32_t *out = (int32_t *) userbuf;
@@ -156,15 +156,22 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     uint32_t ready = multicore_fifo_pop_blocking();
     multicore_fifo_push_blocking(CORE0_READY);
 
+    // Update the volume if required. We do this from core1 as
+    // core0 is more heavily loaded, doing this from core0 can
+    // lead to audio crackling.
+    update_volume();
+
+    // Update filters if required
+    apply_config_changes();
+
     // keep on truckin'
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
 }
 
-void core1_entry() {
+void __no_inline_not_in_flash_func(core1_entry)() {
     uint8_t *userbuf = (uint8_t *) multicore_fifo_pop_blocking();
     int32_t *out = (int32_t *) userbuf;
-    int limit_counter = 100;
 
     // Signal that the thread has started
     multicore_fifo_push_blocking(CORE1_READY);
@@ -189,19 +196,6 @@ void core1_entry() {
 
                 out[i] = (int16_t) norm_fix3_28_to_s16sample(x_f16);
             }
-        }
-
-        // Update the volume and filter configs if required. We do this from
-        // core1 as core0 is more heavily loaded, doing this from core0 can
-        // lead to audio crackling.
-        // Use of a counter reduces the amount of crackling when changing
-        // volume.
-        if (limit_counter != 0)
-            limit_counter--;
-        else {
-            limit_counter = 100;
-            update_volume();
-            apply_config_changes();
         }
 
         // Signal to core 0 that the data has all been transformed
@@ -253,7 +247,7 @@ void setup() {
     // The PCM3060 supports standard mode (100kbps) or fast mode (400kbps)
     // we run in fast mode so we dont block the core for too long while
     // updating the volume.
-    i2c_init(i2c0, 100000);
+    i2c_init(i2c0, 400000);
     gpio_set_function(PCM3060_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(PCM3060_SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(PCM3060_SDA_PIN);
@@ -297,6 +291,7 @@ void setup() {
  * IF YOU DO, YOU COULD BLOW UP YOUR HARDWARE!                               *
  * YOU WERE WARNED!!!!!!!!!!!!!!!!                                           *
  ****************************************************************************/
+ // TODO: roundf will be much faster than round, but it might mess with timings
 void configure_neg_switch_pwm() {
     gpio_set_function(NEG_SWITCH_PWM_PIN, GPIO_FUNC_PWM);
     uint slice_num = pwm_gpio_to_slice_num(NEG_SWITCH_PWM_PIN);

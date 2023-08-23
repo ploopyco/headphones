@@ -15,31 +15,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * SPECIAL THANKS TO:
- * @miketeachman (github.com/miketeachman)
- * @jimmo (github.com/jimmo)
- * @dlech (github.com/dlech)
- * for their exceptional work on the I2S library for the rp2 port of the
- * Micropython project (github.com/micropython/micropython).
+ * Robert Bristow-Johnson, a.k.a. RBJ
+ * for his exceptional work on biquad formulae as applied to digital
+ * audio filtering, summarised in his pamphlet, "Audio EQ Cookbook".
  */
 
-#ifndef RINGBUF_H
-#define RINGBUF_H
+static inline fix3_28_t bqf_transform(fix3_28_t x, bqf_coeff_t *coefficients, bqf_mem_t *memory) {
+    fix3_28_t y = fix16_mul(coefficients->b0, x) -
+            fix16_mul(coefficients->a1, memory->y_1) +
+            fix16_mul(coefficients->b1, memory->x_1) -
+            fix16_mul(coefficients->a2, memory->y_2) +
+            fix16_mul(coefficients->b2, memory->x_2);
 
-#include "pico/stdlib.h"
+    memory->x_2 = memory->x_1;
+    memory->x_1 = x;
+    memory->y_2 = memory->y_1;
+    memory->y_1 = y;
 
-typedef struct _ring_buf_t {
-    uint8_t *buffer;
-    size_t head;
-    size_t tail;
-    size_t size;
-} ring_buf_t;
-
-void ringbuf_init(ring_buf_t *, uint8_t *, size_t);
-bool ringbuf_push(ring_buf_t *, uint8_t );
-bool ringbuf_pop(ring_buf_t *, uint8_t *);
-bool ringbuf_is_empty(ring_buf_t *);
-bool ringbuf_is_full(ring_buf_t *);
-size_t ringbuf_available_data(ring_buf_t *);
-size_t ringbuf_available_space(ring_buf_t *);
-
-#endif
+    return y;
+}

@@ -467,21 +467,6 @@ void bqf_highshelf_config(double fs, double f0, double dBgain, double Q,
     coefficients->a2 = fix3_28_from_dbl(a2);
 }
 
-fix3_28_t bqf_transform(fix3_28_t x, bqf_coeff_t *coefficients, bqf_mem_t *memory) {
-    fix3_28_t y = fix16_mul(coefficients->b0, x) -
-            fix16_mul(coefficients->a1, memory->y_1) +
-            fix16_mul(coefficients->b1, memory->x_1) -
-            fix16_mul(coefficients->a2, memory->y_2) +
-            fix16_mul(coefficients->b2, memory->x_2);
-
-    memory->x_2 = memory->x_1;
-    memory->x_1 = x;
-    memory->y_2 = memory->y_1;
-    memory->y_1 = y;
-
-    return y;
-}
-
 void bqf_memreset(bqf_mem_t *memory) {
     memory->x_1 = fix16_zero;
     memory->x_2 = fix16_zero;
