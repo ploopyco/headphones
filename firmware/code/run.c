@@ -194,7 +194,7 @@ void __no_inline_not_in_flash_func(core1_entry)() {
                 x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
                     &bqf_filters_mem_right[j]);
 
-                out[i] = (int16_t) norm_fix3_28_to_s16sample(x_f16);
+                out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
             }
         }
 
