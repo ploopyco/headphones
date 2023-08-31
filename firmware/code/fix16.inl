@@ -43,7 +43,7 @@ static inline fix3_28_t norm_fix3_28_from_s16sample(int16_t a) {
 ///        calculated sample to one that the DAC can understand.
 /// @param a
 /// @return Signed 16-bit integer.
-static inline int16_t norm_fix3_28_to_s16sample(fix3_28_t a) {
+static inline int32_t norm_fix3_28_to_s16sample(fix3_28_t a) {
     // Handle rounding up front, adding one can cause an overflow/underflow
 
     // It's not clear exactly how this works, so we'll disable it for now.
@@ -60,18 +60,18 @@ static inline int16_t norm_fix3_28_to_s16sample(fix3_28_t a) {
     if (a < 0) {
         if (~upper)
         {
-            return SHRT_MIN;
+            return 0xff800000;
         }
     } else {
         if (upper)
         {
-            return SHRT_MAX;
+            return 0x007fffff;
         }
     }
     /* When we converted the USB audio sample to a fixed point number, we applied
        a normalization, or a gain of 1/65536. To convert it back, we can undo that
        by shifting it back by the same amount we shifted it in the first place. */
-    return (a >> 12);
+    return (a >> 4);
 }
 
 static inline fix3_28_t fix3_28_from_flt(float a) {

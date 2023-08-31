@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
     // we dont need to store the whole input and output files in memory.
     int samples = input_size / 2;
     int16_t *in = (int16_t *) calloc(samples, sizeof(int16_t));
-    int16_t *out = (int16_t *) calloc(samples, sizeof(int16_t));
+    int32_t *out = (int32_t *) calloc(samples, sizeof(int32_t));
 
     fread(in, samples, sizeof(int16_t), input);
     fclose(input);
@@ -54,31 +54,37 @@ int main(int argc, char* argv[])
         out[i] = in[i];
     }
 
-    for (int j = 0; j < filter_stages; j++)
+    for (int i = 0; i < samples; i ++)
     {
-        for (int i = 0; i < samples; i ++)
-        {
-            // Left channel filter
-            fix16_t x_f16 = fix16_from_s16sample((int16_t) out[i]);
+        // Left channel filter
+        fix3_28_t x_f16 = norm_fix3_28_from_s16sample((int16_t) out[i]);
 
+        for (int j = 0; j < filter_stages; j++)
+        {
             x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
                 &bqf_filters_mem_left[j]);
+        }
 
-            out[i] = (int32_t) fix16_to_s16sample(x_f16);
+        out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
 
-            // Right channel filter
-            i++;
-            x_f16 = fix16_from_s16sample((int16_t) out[i]);
+        // Right channel filter
+        i++;
+        x_f16 = norm_fix3_28_from_s16sample((int16_t) out[i]);
 
+        for (int j = 0; j < filter_stages; j++)
+        {
             x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
                 &bqf_filters_mem_right[j]);
-
-            out[i] = (int16_t) fix16_to_s16sample(x_f16);
         }
+
+        out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
+        //printf("%08x\n", out[i]);
     }
 
     // Write out the processed audio.
-    fwrite(out, samples, sizeof(int16_t), output);
+    for (int i=0; i<samples; i++) {
+        fwrite(&out[i], 3, sizeof(int8_t), output);
+    }
     fclose(output);
 
     free(in);
