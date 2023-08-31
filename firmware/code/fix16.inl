@@ -70,7 +70,7 @@ static inline int32_t norm_fix3_28_to_s16sample(fix3_28_t a) {
     }
     /* When we converted the USB audio sample to a fixed point number, we applied
        a normalization, or a gain of 1/65536. To convert it back, we can undo that
-       by shifting it back by the same amount we shifted it in the first place. */
+       by shifting it but we output 24bts, so the shift is reduced. */
     return (a >> 4);
 }
 
@@ -108,4 +108,4 @@ static inline fix3_28_t fix16_mul(fix3_28_t inArg0, fix3_28_t inArg1) {
 #endif
 
     return product_hi;
-}
+}SHRT_MAX << 8
