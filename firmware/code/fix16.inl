@@ -108,4 +108,4 @@ static inline fix3_28_t fix16_mul(fix3_28_t inArg0, fix3_28_t inArg1) {
 #endif
 
     return product_hi;
-}SHRT_MAX << 8
+}
