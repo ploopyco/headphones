@@ -56,22 +56,20 @@ static inline int32_t norm_fix3_28_to_s16sample(fix3_28_t a) {
     */
 
     // Saturate the value if an overflow has occurred
-    uint32_t upper = (a >> 30);
+    uint32_t upper = (a >> 29);
     if (a < 0) {
-        if (~upper)
-        {
+        if (~upper) {
             return 0xff800000;
         }
     } else {
-        if (upper)
-        {
-            return 0x007fffff;
+        if (upper) {
+            return 0x00efffff;
         }
     }
     /* When we converted the USB audio sample to a fixed point number, we applied
        a normalization, or a gain of 1/65536. To convert it back, we can undo that
        by shifting it but we output 24bts, so the shift is reduced. */
-    return (a >> 4);
+    return (a >> 5);
 }
 
 static inline fix3_28_t fix3_28_from_flt(float a) {

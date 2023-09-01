@@ -54,10 +54,12 @@ int main(int argc, char* argv[])
         out[i] = in[i];
     }
 
+    const fix3_28_t preamp = fix3_28_from_flt(0.92f);
+
     for (int i = 0; i < samples; i ++)
     {
         // Left channel filter
-        fix3_28_t x_f16 = norm_fix3_28_from_s16sample((int16_t) out[i]);
+        fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preamp);
 
         for (int j = 0; j < filter_stages; j++)
         {
@@ -69,7 +71,7 @@ int main(int argc, char* argv[])
 
         // Right channel filter
         i++;
-        x_f16 = norm_fix3_28_from_s16sample((int16_t) out[i]);
+        x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preamp);
 
         for (int j = 0; j < filter_stages; j++)
         {
