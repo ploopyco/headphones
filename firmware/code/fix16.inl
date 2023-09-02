@@ -32,11 +32,11 @@ static inline fix3_28_t norm_fix3_28_from_s16sample(int16_t a) {
     /* So, we're using a Q3.28 fixed point system here, and we want the incoming
        audio signal to be represented as a number between -1 and 1. To do this,
        we need the 16-bit value to map to the 28-bit right-of-decimal field in
-       our fixed point number. 28-16 = 12, so we shift the incoming value by
-       that much to covert it to the desired Q3.28 format and do the normalization
-       all in one go.
+       our fixed point number. 28-16 = 12 + the sign bit = 13, so we shift the
+       incoming value by that much to covert it to the desired Q3.28 format and
+       do the normalization all in one go.
     */
-    return (fix3_28_t)a << 12;
+    return (fix3_28_t)a << 13;
 }
 
 /// @brief Convert fixed point samples into signed integer. Used to convert
@@ -69,7 +69,7 @@ static inline int32_t norm_fix3_28_to_s16sample(fix3_28_t a) {
     /* When we converted the USB audio sample to a fixed point number, we applied
        a normalization, or a gain of 1/65536. To convert it back, we can undo that
        by shifting it but we output 24bts, so the shift is reduced. */
-    return (a >> 5);
+    return (a >> 6);
 }
 
 static inline fix3_28_t fix3_28_from_flt(float a) {
