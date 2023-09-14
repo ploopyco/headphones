@@ -56,6 +56,7 @@ audio_state_config audio_state = {
 
 preprocessing_config preprocessing = {
     .preamp = fix16_one,
+    .postEQGain = fix16_one,
     .reverse_stereo = false
 };
 
@@ -148,6 +149,10 @@ static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint 
             x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
                 &bqf_filters_mem_left[j]);
         }
+
+        /* Apply post-EQ gain. */
+        x_f16 = fix16_mul( x_f16, preprocessing.postEQGain);
+
         out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
     }
 
@@ -186,12 +191,18 @@ void __no_inline_not_in_flash_func(core1_entry)() {
         
         const uint32_t samples = multicore_fifo_pop_blocking();
 
+        /* Right channel EQ. */
         for (int i = 1; i < samples; i += 2) {
+            /* Apply EQ pre-filter gain to avoid clipping. */
             fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
+            /* Apply the biquad filters one by one. */
             for (int j = 0; j < filter_stages; j++) {
                 x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
                     &bqf_filters_mem_right[j]);
             }
+            /* Apply post-EQ gain. */
+            x_f16 = fix16_mul( x_f16, preprocessing.postEQGain);
+
             out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
         }
 
@@ -957,7 +968,7 @@ void power_down_dac() {
     i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 2, false);
 }
 
-void power_up_dac() {
+void power_up_dac() {    
     uint8_t buf[2];
     buf[0] = 64; // register addr
     buf[1] = 0xE0; // DAC normal mode

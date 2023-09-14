@@ -110,6 +110,8 @@ typedef struct _audio_device_config {
 
 typedef struct _preprocessing_config {
     fix3_28_t preamp;
+    /// @brief Apply this gain after applying EQ, to set output volume without causing overflow in the EQ calculations.
+    fix3_28_t postEQGain;
     int reverse_stereo;
 } preprocessing_config;
 

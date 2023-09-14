@@ -17,8 +17,8 @@
 #include <stdint.h>
 
 #define FLASH_MAGIC 0x2E8AFEDD
-#define CONFIG_VERSION 3
-#define MINIMUM_CONFIG_VERSION 3
+#define CONFIG_VERSION 4
+#define MINIMUM_CONFIG_VERSION 4
 
 enum structure_types {
     // Commands/Responses, these are container TLVs. The Value will be a set of TLV structures.
@@ -98,9 +98,13 @@ typedef struct __attribute__((__packed__)) _flash_header_tlv {
     const uint8_t tlvs[0];
 } flash_header_tlv;
 
+/// @brief Holds values relating to processing surrounding the EQ calculation.
 typedef struct __attribute__((__packed__)) _preprocessing_configuration_tlv {
     tlv_header header;
+    /// @brief Gain applied to input signal before EQ chain. Use to avoid clipping due to overflow in the biquad filters of the EQ.
     float preamp;
+    /// @brief Gain applied to the output of the EQ chain. Used to set output volume.
+    float postEQGain;
     uint8_t reverse_stereo;
     uint8_t reserved[3];
 } preprocessing_configuration_tlv;
