@@ -140,16 +140,15 @@ static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint 
     multicore_fifo_push_blocking(CORE0_READY);
     multicore_fifo_push_blocking(samples);
 
-    for (int j = 0; j < filter_stages; j++) {
-        // Left channel filter
-        for (int i = 0; i < samples; i += 2) {
-            fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
 
+    // Left channel filter
+    for (int i = 0; i < samples; i += 2) {
+        fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
+        for (int j = 0; j < filter_stages; j++) {
             x_f16 = bqf_transform(x_f16, &bqf_filters_left[j],
                 &bqf_filters_mem_left[j]);
-
-            out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
         }
+        out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
     }
 
     // Block until core 1 has finished transforming the data
@@ -187,15 +186,13 @@ void __no_inline_not_in_flash_func(core1_entry)() {
         
         const uint32_t samples = multicore_fifo_pop_blocking();
 
-        for (int j = 0; j < filter_stages; j++) {
-            for (int i = 1; i < samples; i += 2) {
-                fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
-
+        for (int i = 1; i < samples; i += 2) {
+            fix3_28_t x_f16 = fix16_mul(norm_fix3_28_from_s16sample((int16_t) out[i]), preprocessing.preamp);
+            for (int j = 0; j < filter_stages; j++) {
                 x_f16 = bqf_transform(x_f16, &bqf_filters_right[j],
                     &bqf_filters_mem_right[j]);
-
-                out[i] = (int16_t) norm_fix3_28_to_s16sample(x_f16);
             }
+            out[i] = (int32_t) norm_fix3_28_to_s16sample(x_f16);
         }
 
         // Signal to core 0 that the data has all been transformed
@@ -273,9 +270,9 @@ void setup() {
     // Same here, pal. Hands off.
     sleep_ms(100);
 
-    // Set data format to 16 bit right justified, MSB first
+    // Set data format to 24 bit right justified, MSB first
     buf[0] = 67;   // register addr
-    buf[1] = 0x03; // data
+    buf[1] = 0x02; // data
     i2c_write_blocking(i2c0, PCM_I2C_ADDR, buf, 2, false);
 
     i2s_write_obj.sck_pin = PCM3060_DAC_SCK_PIN;

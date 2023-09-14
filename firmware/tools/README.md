@@ -17,7 +17,7 @@ Run `filter_test` to process the PCM samples. The `filter_test` program takes tw
 You can listen to the PCM files using ffplay (which is usually included with ffmpeg):
 
 ```
-ffplay -f s16le -ar 48000 -ac 2 output.pcm
+ffplay -f s24le -ar 48000 -ac 2 output.pcm
 ```
 
 If there are no obvious problems, go ahead and flash your firmware.

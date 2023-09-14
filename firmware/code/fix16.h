@@ -41,7 +41,7 @@ static const fix3_28_t fix16_zero = 0x00000000;
 
 static inline fix3_28_t norm_fix3_28_from_s16sample(int16_t);
 
-static inline int16_t norm_fix3_28_to_s16sample(fix3_28_t);
+static inline int32_t norm_fix3_28_to_s16sample(fix3_28_t);
 
 static inline fix3_28_t fix3_28_from_flt(float);
 

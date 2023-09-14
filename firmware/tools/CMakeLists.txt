@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD 17)
 
 add_executable(filter_test
     filter_test.c
-    ../code/fix16.c
     ../code/bqf.c
     ../code/configuration_manager.c
 )
