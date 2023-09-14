@@ -149,6 +149,7 @@ static char *descriptor_strings[] = {
 #define SAMPLING_FREQ (CODEC_FREQ / 192)
 
 #define CORE0_READY 19813219
+#define CORE0_ABORTED 91231891
 #define CORE1_READY 72965426
 
 /*****************************************************************************
