@@ -76,6 +76,7 @@ typedef struct _audio_state_config {
         int16_t _target_pcm3060_registers;
     };
     int16_t pcm3060_registers;
+    int8_t interface;
 } audio_state_config;
 extern audio_state_config audio_state;
 

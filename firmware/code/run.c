@@ -52,6 +52,7 @@ static uint8_t *userbuf;
 audio_state_config audio_state = {
     .freq = 48000,
     .de_emphasis_frequency = 0x1, // 48khz
+    .interface = 0
 };
 
 preprocessing_config preprocessing = {
@@ -769,6 +770,7 @@ static const struct usb_transfer_type _audio_cmd_transfer_type = {
 
 static bool as_set_alternate(struct usb_interface *interface, uint alt) {
     assert(interface == &as_op_interface);
+    audio_state.interface = alt;
     switch (alt) {
         case 0: power_down_dac(); return true;
         case 1: power_up_dac(); return true;

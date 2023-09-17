@@ -433,6 +433,12 @@ bool process_cmd(tlv_header* cmd) {
         case SAVE_CONFIGURATION: {
             if (cmd->length == 4) {
                 saveState = SaveRequested;
+                if (audio_state.interface == 0) {
+                    // The OS will configure the alternate "zero" interface when the device is not in use
+                    // in this sate we can write to flash now. Otherwise, defer the save until we get the next
+                    // usb packet.
+                    save_config();
+                }
                 result->type = OK;
                 result->length = 4;
                 return true;
