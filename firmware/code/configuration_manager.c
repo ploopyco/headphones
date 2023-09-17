@@ -404,6 +404,7 @@ bool __no_inline_not_in_flash_func(save_config)() {
             saveState = NormalOperation;
             return false;
         default:
+            break;
     }
 
     return false;
