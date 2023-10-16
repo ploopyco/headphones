@@ -52,6 +52,7 @@ static uint8_t *userbuf;
 audio_state_config audio_state = {
     .freq = 48000,
     .de_emphasis_frequency = 0x1, // 48khz
+    .interface = 0
 };
 
 preprocessing_config preprocessing = {
@@ -125,6 +126,18 @@ static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint 
     int32_t *out = (int32_t *) userbuf;
     int samples = usb_buffer->data_len / 2;
 
+    // Make sure core 1 is ready for us.
+    multicore_fifo_pop_blocking();
+
+    if (save_config()) {
+        // Skip processing while we are writing to flash
+        multicore_fifo_push_blocking(CORE0_ABORTED);
+        // keep on truckin'
+        usb_grow_transfer(ep->current_transfer, 1);
+        usb_packet_done(ep);
+        return;
+    }
+
     if (preprocessing.reverse_stereo) {
         for (int i = 0; i < samples; i+=2) {
             out[i] = in[i+1];
@@ -136,8 +149,6 @@ static void __no_inline_not_in_flash_func(_as_audio_packet)(struct usb_endpoint 
             out[i] = in[i];
     }
  
-    // Make sure core 1 is ready for us.
-    multicore_fifo_pop_blocking();
     multicore_fifo_push_blocking(CORE0_READY);
     multicore_fifo_push_blocking(samples);
 
@@ -186,8 +197,7 @@ void __no_inline_not_in_flash_func(core1_entry)() {
 
         // Block until the userbuf is filled with data
         uint32_t ready = multicore_fifo_pop_blocking();
-        while (ready != CORE0_READY)
-            ready = multicore_fifo_pop_blocking();
+        if (ready == CORE0_ABORTED) continue;
         
         const uint32_t samples = multicore_fifo_pop_blocking();
 
@@ -760,6 +770,7 @@ static const struct usb_transfer_type _audio_cmd_transfer_type = {
 
 static bool as_set_alternate(struct usb_interface *interface, uint alt) {
     assert(interface == &as_op_interface);
+    audio_state.interface = alt;
     switch (alt) {
         case 0: power_down_dac(); return true;
         case 1: power_up_dac(); return true;

@@ -96,6 +96,13 @@ static bool reload_config = false;
 static uint16_t write_offset = 0;
 static uint16_t read_offset = 0;
 
+typedef enum {
+    NormalOperation,
+    SaveRequested,
+    Saving
+} State;
+static State saveState = NormalOperation;
+
 bool validate_filter_configuration(filter_configuration_tlv *filters)
 {
     if (filters->header.type != FILTER_CONFIGURATION) {
@@ -357,37 +364,47 @@ void load_config() {
 }
 
 #ifndef TEST_TARGET
-bool __no_inline_not_in_flash_func(save_configuration)() {
-
-
-    
+bool __no_inline_not_in_flash_func(save_config)() {
     const uint8_t active_configuration = inactive_working_configuration ? 0 : 1;
     tlv_header* config = (tlv_header*) working_configuration[active_configuration];
 
-    if (validate_configuration(config)) {      
+    switch (saveState) {
+        case SaveRequested:
+            if (validate_configuration(config)) {      
+                /* Turn the DAC off so we don't make a huge noise when disrupting
+                real time audio operation. */
+                power_down_dac();
 
-        const size_t config_length = config->length - ((size_t)config->value - (size_t)config);
-        // Write data to flash
-        uint8_t flash_buffer[CFG_BUFFER_SIZE];
-        flash_header_tlv* flash_header = (flash_header_tlv*) flash_buffer;
-        flash_header->header.type = FLASH_HEADER;
-        flash_header->header.length = sizeof(flash_header_tlv) + config_length;
-        flash_header->magic = FLASH_MAGIC;
-        flash_header->version = CONFIG_VERSION;
-        memcpy((void*)(flash_header->tlvs), config->value, config_length);
+                const size_t config_length = config->length - ((size_t)config->value - (size_t)config);
+                // Write data to flash
+                uint8_t flash_buffer[CFG_BUFFER_SIZE];
+                flash_header_tlv* flash_header = (flash_header_tlv*) flash_buffer;
+                flash_header->header.type = FLASH_HEADER;
+                flash_header->header.length = sizeof(flash_header_tlv) + config_length;
+                flash_header->magic = FLASH_MAGIC;
+                flash_header->version = CONFIG_VERSION;
+                memcpy((void*)(flash_header->tlvs), config->value, config_length);
 
-        /* Turn the DAC off so we don't make a huge noise when disrupting
-           real time audio operation. */
-        power_down_dac();
+                uint32_t ints = save_and_disable_interrupts();
+                flash_range_erase(USER_CONFIGURATION_OFFSET, FLASH_SECTOR_SIZE);
+                flash_range_program(USER_CONFIGURATION_OFFSET, flash_buffer, CFG_BUFFER_SIZE);
+                restore_interrupts(ints);
+                saveState = Saving;
 
-        uint32_t ints = save_and_disable_interrupts();
-        flash_range_erase(USER_CONFIGURATION_OFFSET, FLASH_SECTOR_SIZE);
-        flash_range_program(USER_CONFIGURATION_OFFSET, flash_buffer, CFG_BUFFER_SIZE);
-        restore_interrupts(ints);
-
-        power_up_dac();
-
-        return true;
+                // Return true, so the caller skips processing audio
+                return true;
+            }
+            // Validation failed, give up.
+            saveState = NormalOperation;
+            break;
+        case Saving:
+            /* Turn the DAC off so we don't make a huge noise when disrupting
+            real time audio operation. */
+            power_up_dac();
+            saveState = NormalOperation;
+            return false;
+        default:
+            break;
     }
 
     return false;
@@ -415,7 +432,14 @@ bool process_cmd(tlv_header* cmd) {
             }
             break;
         case SAVE_CONFIGURATION: {
-            if (cmd->length == 4 && save_configuration()) {
+            if (cmd->length == 4) {
+                saveState = SaveRequested;
+                if (audio_state.interface == 0) {
+                    // The OS will configure the alternate "zero" interface when the device is not in use
+                    // in this sate we can write to flash now. Otherwise, defer the save until we get the next
+                    // usb packet.
+                    save_config();
+                }
                 result->type = OK;
                 result->length = 4;
                 return true;

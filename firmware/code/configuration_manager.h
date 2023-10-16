@@ -52,6 +52,7 @@ void config_in_packet(struct usb_endpoint *ep);
 void config_out_packet(struct usb_endpoint *ep);
 void configuration_ep_on_cancel(struct usb_endpoint *ep);
 extern void load_config();
+extern bool save_config();
 extern void apply_config_changes();
 
 #endif // CONFIGURATION_MANAGER_H
